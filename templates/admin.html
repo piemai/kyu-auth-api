@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kyu Auth - License Manager</title>
+    <title>Kyu Auth - Pro License Manager</title>
     <style>
         :root {
             --bg-color: #f8fafc;
@@ -58,7 +58,7 @@
 
         .container {
             width: 100%;
-            max-width: 1000px;
+            max-width: 1100px;
         }
 
         header {
@@ -71,6 +71,8 @@
             border-radius: 12px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
             border: 1px solid var(--border-color);
+            flex-wrap: wrap;
+            gap: 12px;
         }
 
         header h1 {
@@ -80,8 +82,18 @@
             font-weight: 700;
         }
 
+        .tz-badge {
+            font-size: 12px;
+            background: var(--code-bg);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+
         .header-actions {
             display: flex;
+            align-items: center;
             gap: 10px;
         }
 
@@ -103,11 +115,11 @@
 
         .form-grid {
             display: grid;
-            grid-template-columns: 1.5fr 1fr;
-            gap: 20px;
+            grid-template-columns: 1.5fr 1fr 0.7fr;
+            gap: 16px;
         }
 
-        @media (max-width: 700px) {
+        @media (max-width: 800px) {
             .form-grid {
                 grid-template-columns: 1fr;
             }
@@ -144,6 +156,22 @@
         input:focus, select:focus {
             outline: none;
             border-color: var(--primary-color);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-color);
+            margin-bottom: 16px;
+            cursor: pointer;
+        }
+
+        .checkbox-group input {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
         }
 
         button {
@@ -196,6 +224,39 @@
             background-color: var(--code-bg);
         }
 
+        .batch-box {
+            margin-top: 16px;
+            padding: 14px;
+            background-color: var(--code-bg);
+            border-radius: 8px;
+            border: 1px dashed var(--primary-color);
+        }
+        .batch-box textarea {
+            width: 100%;
+            height: 90px;
+            background: transparent;
+            border: none;
+            color: var(--text-color);
+            font-family: monospace;
+            font-size: 13px;
+            resize: vertical;
+            outline: none;
+        }
+
+        .table-controls {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .table-controls input {
+            max-width: 320px;
+        }
+        .table-controls select {
+            max-width: 180px;
+        }
+
         .table-responsive {
             overflow-x: auto;
         }
@@ -235,6 +296,12 @@
 
         .key-text:hover {
             opacity: 0.8;
+        }
+
+        .countdown-text {
+            font-family: monospace;
+            font-weight: 600;
+            color: var(--primary-color);
         }
 
         .badge {
@@ -290,7 +357,10 @@
     <!-- MAIN ADMIN PANEL -->
     <div id="adminPanel" class="container hidden">
         <header>
-            <h1>⚡ Kyu Auth Dashboard</h1>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <h1>⚡ Kyu Auth Pro Dashboard</h1>
+                <span class="tz-badge" id="detectedTimezone">🌍 Detecting location...</span>
+            </div>
             <div class="header-actions">
                 <button class="btn-secondary" onclick="toggleTheme()">🌙 / ☀️</button>
                 <button class="btn-danger" onclick="logout()">Logout</button>
@@ -299,14 +369,14 @@
 
         <!-- Generator / Update Form -->
         <div class="card">
-            <h3 id="formTitle">Generate License Key</h3>
+            <h3 id="formTitle">Generate License Key(s)</h3>
             <input type="hidden" id="editKeyId" value="">
             
             <div class="form-grid">
                 <div class="form-group" id="keyInputGroup">
-                    <label for="customKey">License Key (Leave blank for auto-generate)</label>
+                    <label for="customKey">Custom Key or Prefix (Optional)</label>
                     <div class="input-group">
-                        <input type="text" id="customKey" placeholder="e.g., KYU-VIP-2026">
+                        <input type="text" id="customKey" placeholder="e.g., KYU-VIP">
                         <button type="button" class="btn-secondary" onclick="fillRandomKey()">🎲 Random</button>
                     </div>
                 </div>
@@ -314,7 +384,7 @@
                 <div class="form-group">
                     <label>Expiration Duration</label>
                     <div class="input-group">
-                        <input type="number" id="durationVal" min="1" value="1" style="max-width: 90px;">
+                        <input type="number" id="durationVal" min="1" value="1" style="max-width: 85px;">
                         <select id="durationUnit" onchange="toggleDurationInput()">
                             <option value="lifetime">Lifetime</option>
                             <option value="minutes">Minutes</option>
@@ -325,23 +395,54 @@
                         </select>
                     </div>
                 </div>
+
+                <div class="form-group" id="quantityGroup">
+                    <label for="keyQuantity">Quantity (Mass Gen)</label>
+                    <input type="number" id="keyQuantity" min="1" max="100" value="1">
+                </div>
             </div>
+
+            <label class="checkbox-group" id="tgNotifyGroup">
+                <input type="checkbox" id="notifyTg" checked>
+                <span>Send generated key(s) to Telegram Bot</span>
+            </label>
             
-            <div style="display: flex; gap: 10px; margin-top: 8px;">
-                <button id="saveBtn" onclick="saveKey()">Create Key</button>
+            <div style="display: flex; gap: 10px;">
+                <button id="saveBtn" onclick="saveKey()">Create Key(s)</button>
                 <button id="cancelBtn" class="btn-secondary hidden" onclick="resetForm()">Cancel</button>
+            </div>
+
+            <!-- Batch Generated Output -->
+            <div id="batchResultBox" class="batch-box hidden">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong style="font-size: 13px; color: var(--primary-color);">Generated Keys Ready to Copy:</strong>
+                    <button type="button" class="btn-sm" onclick="copyBatchKeys()">📋 Copy All</button>
+                </div>
+                <textarea id="batchKeysOutput" readonly></textarea>
             </div>
         </div>
 
         <!-- Keys Table -->
         <div class="card">
-            <h3>Active & Expired Keys</h3>
+            <div class="table-controls">
+                <h3 style="margin: 0; align-self: center;">License Keys (<span id="keyCount">0</span>)</h3>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <input type="text" id="searchInput" placeholder="Search key or HWID..." oninput="renderKeys()">
+                    <select id="statusFilter" onchange="renderKeys()">
+                        <option value="all">All Status</option>
+                        <option value="active">Active Only</option>
+                        <option value="expired">Expired Only</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="table-responsive">
                 <table>
                     <thead>
                         <tr>
                             <th>License Key (Click to Copy)</th>
-                            <th>Expires At</th>
+                            <th>Expires At (Local Time)</th>
+                            <th>Time Remaining</th>
                             <th>Device ID (HWID)</th>
                             <th>Status</th>
                             <th>Actions</th>
@@ -357,6 +458,8 @@
 
     <script>
         let keys = [];
+        // Automatic detection ng timezone ng device/browser
+        const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
 
         if (sessionStorage.getItem('is_logged_in') === 'true') {
             showAdminPanel();
@@ -386,11 +489,18 @@
                 part2 += chars.charAt(Math.floor(Math.random() * chars.length));
             }
             document.getElementById('customKey').value = `KYU-${part1}-${part2}`;
+            document.getElementById('keyQuantity').value = 1;
         }
 
         function copyToClipboard(text) {
             navigator.clipboard.writeText(text);
-            alert(`Copied to clipboard: ${text}`);
+            alert(`Copied: ${text}`);
+        }
+
+        function copyBatchKeys() {
+            const text = document.getElementById('batchKeysOutput').value;
+            navigator.clipboard.writeText(text);
+            alert('All generated keys copied to clipboard!');
         }
 
         async function login() {
@@ -423,13 +533,61 @@
         function showAdminPanel() {
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('adminPanel').classList.remove('hidden');
+            document.getElementById('detectedTimezone').innerText = `🌍 ${userTimezone}`;
             toggleDurationInput();
             fetchKeys();
+            setInterval(fetchKeys, 5000);
+            setInterval(updateCountdowns, 1000);
         }
 
         function toggleTheme() {
             const body = document.body;
             body.setAttribute('data-theme', body.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+        }
+
+        function formatLocalTime(unixTs) {
+            if (!unixTs) return 'Lifetime';
+            const date = new Date(unixTs * 1000);
+            return date.toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+        }
+
+        function formatRemainingTime(unixTs) {
+            if (!unixTs) return '∞ Lifetime';
+            const nowMs = Date.now();
+            const expMs = unixTs * 1000;
+            const diffMs = expMs - nowMs;
+
+            if (diffMs <= 0) return 'Expired';
+
+            const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+            const mins = Math.floor((diffMs / 1000 / 60) % 60);
+            const secs = Math.floor((diffMs / 1000) % 60);
+
+            if (days > 0) return `${days}d ${hours}h ${mins}m`;
+            if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+            return `${mins}m ${secs}s`;
+        }
+
+        function updateCountdowns() {
+            const cells = document.querySelectorAll('[data-expire-ts]');
+            cells.forEach(cell => {
+                const ts = parseInt(cell.getAttribute('data-expire-ts'));
+                if (!ts) return;
+                const rem = formatRemainingTime(ts);
+                cell.innerText = rem;
+                if (rem === 'Expired') {
+                    cell.style.color = 'var(--danger-color)';
+                }
+            });
         }
 
         async function fetchKeys() {
@@ -447,19 +605,35 @@
 
         function renderKeys() {
             const keyListElement = document.getElementById('keyList');
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            const filtered = keys.filter(item => {
+                const matchesSearch = item.key.toLowerCase().includes(searchQuery) ||
+                                      (item.device_id && item.device_id.toLowerCase().includes(searchQuery));
+                const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+                return matchesSearch && matchesStatus;
+            });
+
+            document.getElementById('keyCount').innerText = filtered.length;
             keyListElement.innerHTML = '';
 
-            if (keys.length === 0) {
-                keyListElement.innerHTML = `<tr><td colspan="5" class="empty-state">No license keys generated yet.</td></tr>`;
+            if (filtered.length === 0) {
+                keyListElement.innerHTML = `<tr><td colspan="6" class="empty-state">No matching license keys found.</td></tr>`;
                 return;
             }
 
-            keys.forEach((item) => {
+            filtered.forEach((item) => {
                 const badgeClass = item.status === 'active' ? 'badge-active' : 'badge-expired';
+                const localDateStr = formatLocalTime(item.expires_ts);
+                const remaining = formatRemainingTime(item.expires_ts);
+                const remStyle = remaining === 'Expired' ? 'color: var(--danger-color);' : '';
+
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td><span class="key-text" onclick="copyToClipboard('${item.key}')" title="Click to copy">${item.key}</span></td>
-                    <td>${item.expires_at || 'Lifetime'}</td>
+                    <td>${localDateStr}</td>
+                    <td><span class="countdown-text" style="${remStyle}" data-expire-ts="${item.expires_ts || ''}">${remaining}</span></td>
                     <td><small style="color: var(--text-muted);">${item.device_id || 'Unbound'}</small></td>
                     <td><span class="badge ${badgeClass}">${item.status}</span></td>
                     <td>
@@ -478,6 +652,8 @@
             const customKey = document.getElementById('customKey').value.trim();
             const durationVal = document.getElementById('durationVal').value;
             const durationUnit = document.getElementById('durationUnit').value;
+            const quantity = parseInt(document.getElementById('keyQuantity').value) || 1;
+            const notifyTg = document.getElementById('notifyTg').checked;
             const editKeyId = document.getElementById('editKeyId').value;
 
             try {
@@ -489,7 +665,10 @@
                         body: JSON.stringify({
                             key: customKey,
                             duration_val: durationVal,
-                            duration_unit: durationUnit
+                            duration_unit: durationUnit,
+                            quantity: quantity,
+                            notify_tg: notifyTg,
+                            timezone: userTimezone
                         })
                     });
                 } else {
@@ -507,7 +686,13 @@
                     alert(data.message);
                     return;
                 }
-                resetForm();
+
+                if (!editKeyId && data.keys) {
+                    document.getElementById('batchKeysOutput').value = data.keys.join('\n');
+                    document.getElementById('batchResultBox').classList.remove('hidden');
+                }
+
+                resetForm(false);
                 fetchKeys();
             } catch (err) {
                 alert('Error saving key.');
@@ -517,6 +702,10 @@
         function editKey(key) {
             document.getElementById('editKeyId').value = key;
             document.getElementById('keyInputGroup').classList.add('hidden');
+            document.getElementById('quantityGroup').classList.add('hidden');
+            document.getElementById('tgNotifyGroup').classList.add('hidden');
+            document.getElementById('batchResultBox').classList.add('hidden');
+
             document.getElementById('formTitle').innerText = `Update Duration for: ${key}`;
             document.getElementById('saveBtn').innerText = "Update Duration";
             document.getElementById('cancelBtn').classList.remove('hidden');
@@ -538,15 +727,22 @@
             }
         }
 
-        function resetForm() {
+        function resetForm(hideBatch = true) {
             document.getElementById('customKey').value = '';
             document.getElementById('durationVal').value = '1';
             document.getElementById('durationUnit').value = 'days';
+            document.getElementById('keyQuantity').value = '1';
             document.getElementById('editKeyId').value = '';
 
             document.getElementById('keyInputGroup').classList.remove('hidden');
-            document.getElementById('formTitle').innerText = "Generate License Key";
-            document.getElementById('saveBtn').innerText = "Create Key";
+            document.getElementById('quantityGroup').classList.remove('hidden');
+            document.getElementById('tgNotifyGroup').classList.remove('hidden');
+            if (hideBatch) {
+                document.getElementById('batchResultBox').classList.add('hidden');
+            }
+
+            document.getElementById('formTitle').innerText = "Generate License Key(s)";
+            document.getElementById('saveBtn').innerText = "Create Key(s)";
             document.getElementById('cancelBtn').classList.add('hidden');
             toggleDurationInput();
         }

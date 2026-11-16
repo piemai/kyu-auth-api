@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kyu Auth - Admin Panel</title>
+    <title>Kyu Auth - License Manager</title>
     <style>
         :root {
             --bg-color: #f8fafc;
@@ -21,6 +21,8 @@
             --code-bg: #f1f5f9;
             --badge-active-bg: #dcfce7;
             --badge-active-text: #166534;
+            --badge-expired-bg: #fee2e2;
+            --badge-expired-text: #991b1b;
         }
 
         [data-theme="dark"] {
@@ -39,6 +41,8 @@
             --code-bg: #334155;
             --badge-active-bg: #064e3b;
             --badge-active-text: #6ee7b7;
+            --badge-expired-bg: #7f1d1d;
+            --badge-expired-text: #fca5a5;
         }
 
         body {
@@ -46,7 +50,7 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
-            padding: 20px;
+            padding: 24px;
             display: flex;
             justify-content: center;
             transition: background-color 0.3s, color 0.3s;
@@ -54,7 +58,7 @@
 
         .container {
             width: 100%;
-            max-width: 950px;
+            max-width: 1000px;
         }
 
         header {
@@ -65,7 +69,7 @@
             background: var(--card-bg);
             padding: 16px 24px;
             border-radius: 12px;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
             border: 1px solid var(--border-color);
         }
 
@@ -84,7 +88,7 @@
         .card {
             background-color: var(--card-bg);
             border-radius: 12px;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
             padding: 24px;
             margin-bottom: 24px;
             border: 1px solid var(--border-color);
@@ -92,18 +96,18 @@
 
         .card h3 {
             margin-top: 0;
-            margin-bottom: 16px;
+            margin-bottom: 18px;
             font-size: 16px;
             font-weight: 600;
         }
 
         .form-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 20px;
         }
 
-        @media (max-width: 600px) {
+        @media (max-width: 700px) {
             .form-grid {
                 grid-template-columns: 1fr;
             }
@@ -121,7 +125,12 @@
             color: var(--text-muted);
         }
 
-        input[type="text"], input[type="password"], input[type="date"], select {
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        input[type="text"], input[type="password"], input[type="number"], select {
             width: 100%;
             padding: 10px 12px;
             border: 1px solid var(--border-color);
@@ -130,7 +139,6 @@
             font-size: 14px;
             background-color: var(--card-bg);
             color: var(--text-color);
-            transition: border-color 0.2s;
         }
 
         input:focus, select:focus {
@@ -146,7 +154,8 @@
             border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
+            white-space: nowrap;
             transition: background-color 0.2s, transform 0.1s;
         }
 
@@ -158,10 +167,13 @@
             background-color: var(--primary-hover);
         }
 
+        .btn-sm {
+            padding: 6px 10px;
+            font-size: 12px;
+        }
+
         .btn-danger {
             background-color: var(--danger-color);
-            padding: 6px 12px;
-            font-size: 12px;
         }
         .btn-danger:hover {
             background-color: var(--danger-hover);
@@ -169,8 +181,6 @@
 
         .btn-warning {
             background-color: var(--warning-color);
-            padding: 6px 12px;
-            font-size: 12px;
             color: white;
         }
         .btn-warning:hover {
@@ -193,45 +203,68 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 4px;
         }
 
         th, td {
-            padding: 12px 16px;
+            padding: 14px 16px;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
             font-size: 13px;
+            vertical-align: middle;
         }
 
         th {
             background-color: var(--table-header);
             font-weight: 600;
             color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
         }
 
         .key-text {
             font-family: monospace;
             background-color: var(--code-bg);
-            padding: 4px 8px;
+            padding: 5px 10px;
             border-radius: 6px;
             font-size: 13px;
             font-weight: 600;
+            display: inline-block;
+            cursor: pointer;
+        }
+
+        .key-text:hover {
+            opacity: 0.8;
         }
 
         .badge {
             display: inline-block;
-            padding: 4px 8px;
+            padding: 4px 10px;
             border-radius: 20px;
             font-size: 11px;
             font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-active {
             background-color: var(--badge-active-bg);
             color: var(--badge-active-text);
+        }
+
+        .badge-expired {
+            background-color: var(--badge-expired-bg);
+            color: var(--badge-expired-text);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 6px;
         }
 
         .empty-state {
             text-align: center;
             color: var(--text-muted);
-            padding: 30px;
+            padding: 32px;
         }
 
         .hidden {
@@ -245,7 +278,7 @@
     <div id="loginScreen" class="container" style="max-width: 400px; margin-top: 80px;">
         <div class="card" style="text-align: center;">
             <h2 style="color: var(--primary-color); margin-bottom: 8px;">Kyu Auth Admin</h2>
-            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px;">Please enter your admin password to sign in.</p>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px;">Enter your admin password to continue.</p>
             <div class="form-group" style="text-align: left;">
                 <label for="loginPassword">Password</label>
                 <input type="password" id="loginPassword" placeholder="••••••••" onkeypress="handleLoginEnter(event)">
@@ -264,39 +297,52 @@
             </div>
         </header>
 
-        <!-- Form for Create / Update -->
+        <!-- Generator / Update Form -->
         <div class="card">
-            <h3 id="formTitle">Create New License Key</h3>
+            <h3 id="formTitle">Generate License Key</h3>
             <input type="hidden" id="editKeyId" value="">
             
             <div class="form-grid">
-                <div class="form-group">
-                    <label for="keyOwner">Owner / Client Name</label>
-                    <input type="text" id="keyOwner" placeholder="e.g., John Doe">
+                <div class="form-group" id="keyInputGroup">
+                    <label for="customKey">License Key (Leave blank for auto-generate)</label>
+                    <div class="input-group">
+                        <input type="text" id="customKey" placeholder="e.g., KYU-VIP-2026">
+                        <button type="button" class="btn-secondary" onclick="fillRandomKey()">🎲 Random</button>
+                    </div>
                 </div>
+
                 <div class="form-group">
-                    <label for="keyExpire">Expiration Date (Optional)</label>
-                    <input type="date" id="keyExpire">
+                    <label>Expiration Duration</label>
+                    <div class="input-group">
+                        <input type="number" id="durationVal" min="1" value="1" style="max-width: 90px;">
+                        <select id="durationUnit" onchange="toggleDurationInput()">
+                            <option value="lifetime">Lifetime</option>
+                            <option value="minutes">Minutes</option>
+                            <option value="hours">Hours</option>
+                            <option value="days" selected>Days</option>
+                            <option value="months">Months</option>
+                            <option value="years">Years</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             
             <div style="display: flex; gap: 10px; margin-top: 8px;">
-                <button id="saveBtn" onclick="saveKey()">Generate Key</button>
+                <button id="saveBtn" onclick="saveKey()">Create Key</button>
                 <button id="cancelBtn" class="btn-secondary hidden" onclick="resetForm()">Cancel</button>
             </div>
         </div>
 
-        <!-- List (Read, Update, Delete) -->
+        <!-- Keys Table -->
         <div class="card">
-            <h3>License Keys List</h3>
+            <h3>Active & Expired Keys</h3>
             <div class="table-responsive">
                 <table>
                     <thead>
                         <tr>
-                            <th>Owner</th>
-                            <th>License Key</th>
-                            <th>Expiration</th>
-                            <th>Device Bound</th>
+                            <th>License Key (Click to Copy)</th>
+                            <th>Expires At</th>
+                            <th>Device ID (HWID)</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -320,6 +366,33 @@
             if (e.key === 'Enter') login();
         }
 
+        function toggleDurationInput() {
+            const unit = document.getElementById('durationUnit').value;
+            const valInput = document.getElementById('durationVal');
+            if (unit === 'lifetime') {
+                valInput.disabled = true;
+                valInput.style.opacity = '0.5';
+            } else {
+                valInput.disabled = false;
+                valInput.style.opacity = '1';
+            }
+        }
+
+        function fillRandomKey() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let part1 = '', part2 = '';
+            for (let i = 0; i < 6; i++) {
+                part1 += chars.charAt(Math.floor(Math.random() * chars.length));
+                part2 += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            document.getElementById('customKey').value = `KYU-${part1}-${part2}`;
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text);
+            alert(`Copied to clipboard: ${text}`);
+        }
+
         async function login() {
             const password = document.getElementById('loginPassword').value;
             try {
@@ -336,7 +409,7 @@
                     alert(data.message);
                 }
             } catch (err) {
-                alert('Connection error with the server.');
+                alert('Server connection error.');
             }
         }
 
@@ -350,6 +423,7 @@
         function showAdminPanel() {
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('adminPanel').classList.remove('hidden');
+            toggleDurationInput();
             fetchKeys();
         }
 
@@ -376,21 +450,24 @@
             keyListElement.innerHTML = '';
 
             if (keys.length === 0) {
-                keyListElement.innerHTML = `<tr><td colspan="6" class="empty-state">No keys found.</td></tr>`;
+                keyListElement.innerHTML = `<tr><td colspan="5" class="empty-state">No license keys generated yet.</td></tr>`;
                 return;
             }
 
             keys.forEach((item) => {
+                const badgeClass = item.status === 'active' ? 'badge-active' : 'badge-expired';
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td><strong>${item.owner}</strong></td>
-                    <td><span class="key-text">${item.key}</span></td>
-                    <td>${item.expire || 'Lifetime'}</td>
-                    <td><small style="color: var(--text-muted);">${item.device_id || 'Not bound'}</small></td>
-                    <td><span class="badge">${item.status}</span></td>
+                    <td><span class="key-text" onclick="copyToClipboard('${item.key}')" title="Click to copy">${item.key}</span></td>
+                    <td>${item.expires_at || 'Lifetime'}</td>
+                    <td><small style="color: var(--text-muted);">${item.device_id || 'Unbound'}</small></td>
+                    <td><span class="badge ${badgeClass}">${item.status}</span></td>
                     <td>
-                        <button class="btn-warning" onclick="editKey('${item.key}', '${item.owner}', '${item.expire}')">Edit</button>
-                        <button class="btn-danger" onclick="deleteKey('${item.key}')">Delete</button>
+                        <div class="action-buttons">
+                            <button class="btn-sm btn-warning" onclick="editKey('${item.key}')">Extend / Edit</button>
+                            ${item.device_id ? `<button class="btn-sm btn-secondary" onclick="resetHwid('${item.key}')">Reset HWID</button>` : ''}
+                            <button class="btn-sm btn-danger" onclick="deleteKey('${item.key}')">Delete</button>
+                        </div>
                     </td>
                 `;
                 keyListElement.appendChild(row);
@@ -398,61 +475,91 @@
         }
 
         async function saveKey() {
-            const owner = document.getElementById('keyOwner').value.trim() || 'No Name';
-            const expire = document.getElementById('keyExpire').value;
+            const customKey = document.getElementById('customKey').value.trim();
+            const durationVal = document.getElementById('durationVal').value;
+            const durationUnit = document.getElementById('durationUnit').value;
             const editKeyId = document.getElementById('editKeyId').value;
 
             try {
+                let res;
                 if (!editKeyId) {
-                    await fetch('/api/keys', {
+                    res = await fetch('/api/keys', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ owner, expire })
+                        body: JSON.stringify({
+                            key: customKey,
+                            duration_val: durationVal,
+                            duration_unit: durationUnit
+                        })
                     });
                 } else {
-                    await fetch(`/api/keys/${encodeURIComponent(editKeyId)}`, {
+                    res = await fetch(`/api/keys/${encodeURIComponent(editKeyId)}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ owner, expire })
+                        body: JSON.stringify({
+                            duration_val: durationVal,
+                            duration_unit: durationUnit
+                        })
                     });
+                }
+                const data = await res.json();
+                if (!data.success) {
+                    alert(data.message);
+                    return;
                 }
                 resetForm();
                 fetchKeys();
             } catch (err) {
-                alert('Error saving the key.');
+                alert('Error saving key.');
             }
         }
 
-        function editKey(key, owner, expire) {
-            document.getElementById('keyOwner').value = owner;
-            document.getElementById('keyExpire').value = expire ? expire.split(' ')[0] : '';
+        function editKey(key) {
             document.getElementById('editKeyId').value = key;
-
-            document.getElementById('formTitle').innerText = `Update Key: ${key}`;
-            document.getElementById('saveBtn').innerText = "Save Changes";
+            document.getElementById('keyInputGroup').classList.add('hidden');
+            document.getElementById('formTitle').innerText = `Update Duration for: ${key}`;
+            document.getElementById('saveBtn').innerText = "Update Duration";
             document.getElementById('cancelBtn').classList.remove('hidden');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
+        async function resetHwid(key) {
+            if (confirm(`Reset bound Device ID for "${key}"?`)) {
+                try {
+                    await fetch(`/api/keys/${encodeURIComponent(key)}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'reset_hwid' })
+                    });
+                    fetchKeys();
+                } catch (err) {
+                    alert('Error resetting HWID.');
+                }
+            }
+        }
+
         function resetForm() {
-            document.getElementById('keyOwner').value = '';
-            document.getElementById('keyExpire').value = '';
+            document.getElementById('customKey').value = '';
+            document.getElementById('durationVal').value = '1';
+            document.getElementById('durationUnit').value = 'days';
             document.getElementById('editKeyId').value = '';
 
-            document.getElementById('formTitle').innerText = "Create New License Key";
-            document.getElementById('saveBtn').innerText = "Generate Key";
+            document.getElementById('keyInputGroup').classList.remove('hidden');
+            document.getElementById('formTitle').innerText = "Generate License Key";
+            document.getElementById('saveBtn').innerText = "Create Key";
             document.getElementById('cancelBtn').classList.add('hidden');
+            toggleDurationInput();
         }
 
         async function deleteKey(key) {
-            if (confirm(`Are you sure you want to delete the key "${key}"?`)) {
+            if (confirm(`Are you sure you want to delete "${key}"?`)) {
                 try {
                     await fetch(`/api/keys/${encodeURIComponent(key)}`, {
                         method: 'DELETE'
                     });
                     fetchKeys();
                 } catch (err) {
-                    alert('Error deleting the key.');
+                    alert('Error deleting key.');
                 }
             }
         }

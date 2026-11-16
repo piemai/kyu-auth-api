@@ -4,7 +4,7 @@ import random
 import string
 import urllib.request
 from flask import Flask, request, jsonify, render_template
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 app = Flask(__name__)
 DB_FILE = 'keys.json'
@@ -41,12 +41,13 @@ def save_db(data):
     with open(DB_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
-def calculate_expiration(amount, unit):
+def calculate_expiration_utc(amount, unit):
+    """Nagbabalik ng Unix timestamp (seconds) sa UTC."""
     if not amount or unit == 'lifetime':
-        return ""
+        return None
     try:
         val = int(amount)
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         if unit == 'minutes':
             exp = now + timedelta(minutes=val)
         elif unit == 'hours':
@@ -58,10 +59,10 @@ def calculate_expiration(amount, unit):
         elif unit == 'years':
             exp = now + timedelta(days=val * 365)
         else:
-            return ""
-        return exp.strftime('%Y-%m-%d %I:%M:%S %p')
+            return None
+        return int(exp.timestamp())
     except Exception:
-        return ""
+        return None
 
 @app.route('/')
 def home():
@@ -80,33 +81,22 @@ def handle_keys():
 
     if request.method == 'GET':
         result = []
-        now = datetime.now()
+        now_ts = int(datetime.now(timezone.utc).timestamp())
         updated = False
 
         for key, info in keys_data.items():
-            expires_at = info.get('expires_at', '')
+            expires_ts = info.get('expires_ts')
             status = info.get('status', 'active')
 
-            if expires_at and status == 'active':
-                try:
-                    exp_time = datetime.strptime(expires_at, '%Y-%m-%d %I:%M:%S %p')
-                    if now > exp_time:
-                        status = 'expired'
-                        keys_data[key]['status'] = 'expired'
-                        updated = True
-                except Exception:
-                    try:
-                        exp_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
-                        if now > exp_time:
-                            status = 'expired'
-                            keys_data[key]['status'] = 'expired'
-                            updated = True
-                    except Exception:
-                        pass
+            if expires_ts and status == 'active':
+                if now_ts > expires_ts:
+                    status = 'expired'
+                    keys_data[key]['status'] = 'expired'
+                    updated = True
 
             result.append({
                 "key": key,
-                "expires_at": expires_at,
+                "expires_ts": expires_ts,
                 "status": status,
                 "device_id": info.get('device_id', '')
             })
@@ -123,15 +113,16 @@ def handle_keys():
         duration_unit = data.get('duration_unit', 'lifetime')
         quantity = min(max(int(data.get('quantity', 1)), 1), 100)
         notify_tg = data.get('notify_tg', False)
+        client_tz = data.get('timezone', 'UTC')
 
-        formatted_expire = calculate_expiration(duration_val, duration_unit)
+        exp_ts = calculate_expiration_utc(duration_val, duration_unit)
         created_keys = []
 
         if custom_key and quantity == 1:
             if custom_key in keys_data:
                 return jsonify({"success": False, "message": "Key already exists!"})
             keys_data[custom_key] = {
-                "expires_at": formatted_expire,
+                "expires_ts": exp_ts,
                 "status": "active",
                 "device_id": ""
             }
@@ -146,7 +137,7 @@ def handle_keys():
                     if new_key not in keys_data:
                         break
                 keys_data[new_key] = {
-                    "expires_at": formatted_expire,
+                    "expires_ts": exp_ts,
                     "status": "active",
                     "device_id": ""
                 }
@@ -155,12 +146,16 @@ def handle_keys():
         save_db(keys_data)
 
         if notify_tg and created_keys:
-            exp_label = formatted_expire if formatted_expire else "Lifetime"
+            if exp_ts:
+                exp_label = f"{duration_val} {duration_unit} (UTC Timestamp: {exp_ts})"
+            else:
+                exp_label = "Lifetime"
             keys_formatted = "\n".join([f"<code>{k}</code>" for k in created_keys])
             tg_msg = (
                 f"<b>🔑 NEW LICENSE KEY(S) GENERATED</b>\n\n"
                 f"📦 <b>Quantity:</b> {len(created_keys)}\n"
-                f"⏳ <b>Expiration:</b> {exp_label}\n\n"
+                f"⏳ <b>Duration:</b> {exp_label}\n"
+                f"🌍 <b>Creator Timezone:</b> {client_tz}\n\n"
                 f"<b>Keys:</b>\n{keys_formatted}"
             )
             send_telegram_alert(tg_msg)
@@ -195,7 +190,7 @@ def modify_key(key_id):
         duration_val = data.get('duration_val', '1')
         duration_unit = data.get('duration_unit', 'lifetime')
 
-        keys_data[key_id]['expires_at'] = calculate_expiration(duration_val, duration_unit)
+        keys_data[key_id]['expires_ts'] = calculate_expiration_utc(duration_val, duration_unit)
         keys_data[key_id]['status'] = 'active'
 
         save_db(keys_data)
@@ -220,23 +215,13 @@ def verify_key():
     if key_info.get('status') != 'active':
         return jsonify({"success": False, "message": "License key is expired or inactive."})
 
-    expires_at = key_info.get('expires_at', '')
-    if expires_at:
-        try:
-            exp_time = datetime.strptime(expires_at, '%Y-%m-%d %I:%M:%S %p')
-            if datetime.now() > exp_time:
-                key_info['status'] = 'expired'
-                save_db(keys_data)
-                return jsonify({"success": False, "message": "License key has expired."})
-        except Exception:
-            try:
-                exp_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
-                if datetime.now() > exp_time:
-                    key_info['status'] = 'expired'
-                    save_db(keys_data)
-                    return jsonify({"success": False, "message": "License key has expired."})
-            except Exception:
-                pass
+    expires_ts = key_info.get('expires_ts')
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+
+    if expires_ts and now_ts > expires_ts:
+        key_info['status'] = 'expired'
+        save_db(keys_data)
+        return jsonify({"success": False, "message": "License key has expired."})
 
     stored_device = key_info.get('device_id', '')
     if not stored_device:
@@ -245,7 +230,10 @@ def verify_key():
     elif stored_device != device_id:
         return jsonify({"success": False, "message": "Key is already bound to another PC/Device."})
 
-    return jsonify({"success": True, "expires_at": expires_at or "Lifetime"})
+    return jsonify({
+        "success": True,
+        "expires_ts": expires_ts
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

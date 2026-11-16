@@ -2,12 +2,31 @@ import os
 import json
 import random
 import string
+import urllib.request
 from flask import Flask, request, jsonify, render_template
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
 DB_FILE = 'keys.json'
 ADMIN_PASSWORD = "admin123"
+
+TELEGRAM_BOT_TOKEN = "9198628207:AAH3PsBEh6S5Xo7SytUohMD3Of95d9eGTbQ"
+TELEGRAM_CHAT_ID = "6516330870"
+
+def send_telegram_alert(message):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = json.dumps({
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML"
+    }).encode('utf-8')
+    try:
+        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+        urllib.request.urlopen(req, timeout=8)
+    except Exception:
+        pass
 
 def load_db():
     if not os.path.exists(DB_FILE):
@@ -40,7 +59,6 @@ def calculate_expiration(amount, unit):
             exp = now + timedelta(days=val * 365)
         else:
             return ""
-        # 12-hour format na may AM/PM (Halimbawa: 2026-11-16 11:30:00 PM)
         return exp.strftime('%Y-%m-%d %I:%M:%S %p')
     except Exception:
         return ""
@@ -69,7 +87,6 @@ def handle_keys():
             expires_at = info.get('expires_at', '')
             status = info.get('status', 'active')
 
-            # Auto-check kung expired na gamit ang 12-hour format parser
             if expires_at and status == 'active':
                 try:
                     exp_time = datetime.strptime(expires_at, '%Y-%m-%d %I:%M:%S %p')
@@ -79,7 +96,6 @@ def handle_keys():
                         updated = True
                 except Exception:
                     try:
-                        # Fallback sakaling may lumang 24-hour format sa keys.json
                         exp_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
                         if now > exp_time:
                             status = 'expired'
@@ -105,24 +121,55 @@ def handle_keys():
         custom_key = str(data.get('key', '')).strip()
         duration_val = data.get('duration_val', '1')
         duration_unit = data.get('duration_unit', 'lifetime')
-
-        if not custom_key:
-            part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            part2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            custom_key = f"KYU-{part1}-{part2}"
-
-        if custom_key in keys_data:
-            return jsonify({"success": False, "message": "Key already exists!"})
+        quantity = min(max(int(data.get('quantity', 1)), 1), 100)
+        notify_tg = data.get('notify_tg', False)
 
         formatted_expire = calculate_expiration(duration_val, duration_unit)
+        created_keys = []
 
-        keys_data[custom_key] = {
-            "expires_at": formatted_expire,
-            "status": "active",
-            "device_id": ""
-        }
+        if custom_key and quantity == 1:
+            if custom_key in keys_data:
+                return jsonify({"success": False, "message": "Key already exists!"})
+            keys_data[custom_key] = {
+                "expires_at": formatted_expire,
+                "status": "active",
+                "device_id": ""
+            }
+            created_keys.append(custom_key)
+        else:
+            prefix = custom_key if custom_key else "KYU"
+            for _ in range(quantity):
+                while True:
+                    part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+                    part2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+                    new_key = f"{prefix}-{part1}-{part2}"
+                    if new_key not in keys_data:
+                        break
+                keys_data[new_key] = {
+                    "expires_at": formatted_expire,
+                    "status": "active",
+                    "device_id": ""
+                }
+                created_keys.append(new_key)
+
         save_db(keys_data)
-        return jsonify({"success": True, "message": "Key generated successfully", "key": custom_key})
+
+        if notify_tg and created_keys:
+            exp_label = formatted_expire if formatted_expire else "Lifetime"
+            keys_formatted = "\n".join([f"<code>{k}</code>" for k in created_keys])
+            tg_msg = (
+                f"<b>🔑 NEW LICENSE KEY(S) GENERATED</b>\n\n"
+                f"📦 <b>Quantity:</b> {len(created_keys)}\n"
+                f"⏳ <b>Expiration:</b> {exp_label}\n\n"
+                f"<b>Keys:</b>\n{keys_formatted}"
+            )
+            send_telegram_alert(tg_msg)
+
+        return jsonify({
+            "success": True,
+            "message": f"{len(created_keys)} key(s) generated successfully!",
+            "keys": created_keys
+        })
 
 @app.route('/api/keys/<path:key_id>', methods=['PUT', 'DELETE'])
 def modify_key(key_id):
@@ -176,7 +223,6 @@ def verify_key():
     expires_at = key_info.get('expires_at', '')
     if expires_at:
         try:
-            # Subukan i-parse ang 12-hour format
             exp_time = datetime.strptime(expires_at, '%Y-%m-%d %I:%M:%S %p')
             if datetime.now() > exp_time:
                 key_info['status'] = 'expired'
@@ -184,7 +230,6 @@ def verify_key():
                 return jsonify({"success": False, "message": "License key has expired."})
         except Exception:
             try:
-                # Fallback sakaling lumang 24-hour format
                 exp_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
                 if datetime.now() > exp_time:
                     key_info['status'] = 'expired'

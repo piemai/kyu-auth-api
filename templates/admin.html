@@ -1,42 +1,48 @@
 <!DOCTYPE html>
-<html lang="tl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Key Management Admin Panel</title>
+    <title>Kyu Auth - Admin Panel</title>
     <style>
         :root {
-            --bg-color: #f4f6f9;
+            --bg-color: #f8fafc;
             --card-bg: #ffffff;
-            --text-color: #333333;
+            --text-color: #1e293b;
+            --text-muted: #64748b;
             --primary-color: #4f46e5;
             --primary-hover: #4338ca;
             --danger-color: #ef4444;
             --danger-hover: #dc2626;
             --warning-color: #f59e0b;
             --warning-hover: #d97706;
-            --border-color: #e5e7eb;
-            --table-header: #f9fafb;
-            --code-bg: #f3f4f6;
+            --border-color: #e2e8f0;
+            --table-header: #f1f5f9;
+            --code-bg: #f1f5f9;
+            --badge-active-bg: #dcfce7;
+            --badge-active-text: #166534;
         }
 
         [data-theme="dark"] {
-            --bg-color: #111827;
-            --card-bg: #1f2937;
-            --text-color: #f9fafb;
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
             --primary-color: #6366f1;
             --primary-hover: #4f46e5;
             --danger-color: #f87171;
             --danger-hover: #ef4444;
             --warning-color: #fbbf24;
             --warning-hover: #f59e0b;
-            --border-color: #374151;
-            --table-header: #374151;
-            --code-bg: #374151;
+            --border-color: #334155;
+            --table-header: #334155;
+            --code-bg: #334155;
+            --badge-active-bg: #064e3b;
+            --badge-active-text: #6ee7b7;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
@@ -48,20 +54,26 @@
 
         .container {
             width: 100%;
-            max-width: 800px;
+            max-width: 950px;
         }
 
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
+            background: var(--card-bg);
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border-color);
         }
 
         header h1 {
             margin: 0;
-            font-size: 22px;
+            font-size: 20px;
             color: var(--primary-color);
+            font-weight: 700;
         }
 
         .header-actions {
@@ -71,45 +83,75 @@
 
         .card {
             background-color: var(--card-bg);
-            border-radius: 8px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            padding: 20px;
-            margin-bottom: 20px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            margin-bottom: 24px;
             border: 1px solid var(--border-color);
         }
 
+        .card h3 {
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 600px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 16px;
         }
 
         label {
             display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            font-size: 14px;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 13px;
+            color: var(--text-muted);
         }
 
-        input[type="text"], input[type="password"], input[type="date"] {
+        input[type="text"], input[type="password"], input[type="date"], select {
             width: 100%;
-            padding: 10px;
+            padding: 10px 12px;
             border: 1px solid var(--border-color);
-            border-radius: 6px;
+            border-radius: 8px;
             box-sizing: border-box;
             font-size: 14px;
             background-color: var(--card-bg);
             color: var(--text-color);
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
         }
 
         button {
             background-color: var(--primary-color);
             color: white;
             border: none;
-            padding: 10px 15px;
-            border-radius: 6px;
+            padding: 10px 16px;
+            border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
             font-size: 14px;
-            transition: background-color 0.2s;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.98);
         }
 
         button:hover {
@@ -118,7 +160,7 @@
 
         .btn-danger {
             background-color: var(--danger-color);
-            padding: 6px 10px;
+            padding: 6px 12px;
             font-size: 12px;
         }
         .btn-danger:hover {
@@ -127,7 +169,7 @@
 
         .btn-warning {
             background-color: var(--warning-color);
-            padding: 6px 10px;
+            padding: 6px 12px;
             font-size: 12px;
             color: white;
         }
@@ -136,44 +178,62 @@
         }
 
         .btn-secondary {
-            background-color: #6b7280;
+            background-color: transparent;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
         }
         .btn-secondary:hover {
-            background-color: #4b5563;
+            background-color: var(--code-bg);
+        }
+
+        .table-responsive {
+            overflow-x: auto;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
+            margin-top: 4px;
         }
 
         th, td {
-            padding: 12px;
+            padding: 12px 16px;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
-            font-size: 14px;
+            font-size: 13px;
         }
 
         th {
             background-color: var(--table-header);
             font-weight: 600;
+            color: var(--text-muted);
         }
 
         .key-text {
             font-family: monospace;
             background-color: var(--code-bg);
-            padding: 4px 6px;
-            border-radius: 4px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            background-color: var(--badge-active-bg);
+            color: var(--badge-active-text);
         }
 
         .empty-state {
             text-align: center;
-            color: #6b7280;
-            padding: 20px;
+            color: var(--text-muted);
+            padding: 30px;
         }
 
-        /* Hidden helper */
         .hidden {
             display: none !important;
         }
@@ -182,84 +242,101 @@
 <body data-theme="light">
 
     <!-- LOGIN SCREEN -->
-    <div id="loginScreen" class="container" style="max-width: 400px; margin-top: 100px;">
-        <div class="card">
-            <h2 style="text-align: center; color: var(--primary-color);">Admin Login</h2>
-            <p style="text-align: center; font-size: 13px; color: #6b7280;">Password default: <code>admin123</code></p>
-            <div class="form-group">
+    <div id="loginScreen" class="container" style="max-width: 400px; margin-top: 80px;">
+        <div class="card" style="text-align: center;">
+            <h2 style="color: var(--primary-color); margin-bottom: 8px;">Kyu Auth Admin</h2>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px;">Please enter your admin password to sign in.</p>
+            <div class="form-group" style="text-align: left;">
                 <label for="loginPassword">Password</label>
-                <input type="password" id="loginPassword" placeholder="I-type ang password">
+                <input type="password" id="loginPassword" placeholder="••••••••" onkeypress="handleLoginEnter(event)">
             </div>
-            <button onclick="login()" style="width: 100%;">Mag-log in</button>
+            <button onclick="login()" style="width: 100%;">Sign In</button>
         </div>
     </div>
 
     <!-- MAIN ADMIN PANEL -->
     <div id="adminPanel" class="container hidden">
         <header>
-            <h1>Key Management Dashboard</h1>
+            <h1>⚡ Kyu Auth Dashboard</h1>
             <div class="header-actions">
-                <button class="btn-secondary" onclick="toggleTheme()">🌙 / ☀️ Mode</button>
+                <button class="btn-secondary" onclick="toggleTheme()">🌙 / ☀️</button>
                 <button class="btn-danger" onclick="logout()">Logout</button>
             </div>
         </header>
 
-        <!-- Form para sa Create / Update -->
+        <!-- Form for Create / Update -->
         <div class="card">
-            <h3 id="formTitle">Gumawa ng Bagong Key</h3>
-            <input type="hidden" id="editIndex" value="-1">
+            <h3 id="formTitle">Create New License Key</h3>
+            <input type="hidden" id="editKeyId" value="">
             
-            <div class="form-group">
-                <label for="keyOwner">Pangalan / May-ari</label>
-                <input type="text" id="keyOwner" placeholder="Hal. Juan Dela Cruz">
-            </div>
-            <div class="form-group">
-                <label for="keyExpire">Expiration Date</label>
-                <input type="date" id="keyExpire">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="keyOwner">Owner / Client Name</label>
+                    <input type="text" id="keyOwner" placeholder="e.g., John Doe">
+                </div>
+                <div class="form-group">
+                    <label for="keyExpire">Expiration Date (Optional)</label>
+                    <input type="date" id="keyExpire">
+                </div>
             </div>
             
-            <div style="display: flex; gap: 10px;">
-                <button id="saveBtn" onclick="saveKey()">Mag-generate / I-save</button>
-                <button id="cancelBtn" class="btn-secondary hidden" onclick="resetForm()">I-cancel</button>
+            <div style="display: flex; gap: 10px; margin-top: 8px;">
+                <button id="saveBtn" onclick="saveKey()">Generate Key</button>
+                <button id="cancelBtn" class="btn-secondary hidden" onclick="resetForm()">Cancel</button>
             </div>
         </div>
 
-        <!-- Listahan (Read & Delete / Edit) -->
+        <!-- List (Read, Update, Delete) -->
         <div class="card">
-            <h3>Listahan ng mga Active Keys</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>May-ari</th>
-                        <th>Key</th>
-                        <th>Expiration</th>
-                        <th>Aksyon</th>
-                    </tr>
-                </thead>
-                <tbody id="keyList">
-                    <!-- Dynamic Rows -->
-                </tbody>
-            </table>
+            <h3>License Keys List</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Owner</th>
+                            <th>License Key</th>
+                            <th>Expiration</th>
+                            <th>Device Bound</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="keyList">
+                        <!-- Dynamic Rows -->
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
     <script>
-        // Simple Auth & State Management
-        let keys = JSON.parse(localStorage.getItem('admin_keys_v2')) || [];
-        const DEFAULT_PASSWORD = "admin123";
+        let keys = [];
 
-        // Suriin kung naka-login na
         if (sessionStorage.getItem('is_logged_in') === 'true') {
             showAdminPanel();
         }
 
-        function login() {
-            const pass = document.getElementById('loginPassword').value;
-            if (pass === DEFAULT_PASSWORD) {
-                sessionStorage.setItem('is_logged_in', 'true');
-                showAdminPanel();
-            } else {
-                alert('Maling password! Subukan ang "admin123".');
+        function handleLoginEnter(e) {
+            if (e.key === 'Enter') login();
+        }
+
+        async function login() {
+            const password = document.getElementById('loginPassword').value;
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    sessionStorage.setItem('is_logged_in', 'true');
+                    showAdminPanel();
+                } else {
+                    alert(data.message);
+                }
+            } catch (err) {
+                alert('Connection error with the server.');
             }
         }
 
@@ -273,96 +350,110 @@
         function showAdminPanel() {
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('adminPanel').classList.remove('hidden');
-            renderKeys();
+            fetchKeys();
         }
 
-        // Theme Toggle
         function toggleTheme() {
             const body = document.body;
-            if (body.getAttribute('data-theme') === 'light') {
-                body.setAttribute('data-theme', 'dark');
-            } else {
-                body.setAttribute('data-theme', 'light');
+            body.setAttribute('data-theme', body.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+        }
+
+        async function fetchKeys() {
+            try {
+                const res = await fetch('/api/keys');
+                const data = await res.json();
+                if (data.success) {
+                    keys = data.keys;
+                    renderKeys();
+                }
+            } catch (err) {
+                console.error('Error fetching keys:', err);
             }
         }
 
-        // CRUD Operations
         function renderKeys() {
             const keyListElement = document.getElementById('keyList');
             keyListElement.innerHTML = '';
 
             if (keys.length === 0) {
-                keyListElement.innerHTML = `<tr><td colspan="4" class="empty-state">Wala pang nakatalang key.</td></tr>`;
+                keyListElement.innerHTML = `<tr><td colspan="6" class="empty-state">No keys found.</td></tr>`;
                 return;
             }
 
-            keys.forEach((item, index) => {
+            keys.forEach((item) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${item.owner}</td>
+                    <td><strong>${item.owner}</strong></td>
                     <td><span class="key-text">${item.key}</span></td>
-                    <td>${item.expire || 'Walang Expiry'}</td>
+                    <td>${item.expire || 'Lifetime'}</td>
+                    <td><small style="color: var(--text-muted);">${item.device_id || 'Not bound'}</small></td>
+                    <td><span class="badge">${item.status}</span></td>
                     <td>
-                        <button class="btn-warning" onclick="editKey(${index})">Edit</button>
-                        <button class="btn-danger" onclick="deleteKey(${index})">Delete</button>
+                        <button class="btn-warning" onclick="editKey('${item.key}', '${item.owner}', '${item.expire}')">Edit</button>
+                        <button class="btn-danger" onclick="deleteKey('${item.key}')">Delete</button>
                     </td>
                 `;
                 keyListElement.appendChild(row);
             });
         }
 
-        function saveKey() {
-            const ownerInput = document.getElementById('keyOwner');
-            const expireInput = document.getElementById('keyExpire');
-            const editIndex = document.getElementById('editIndex').value;
+        async function saveKey() {
+            const owner = document.getElementById('keyOwner').value.trim() || 'No Name';
+            const expire = document.getElementById('keyExpire').value;
+            const editKeyId = document.getElementById('editKeyId').value;
 
-            const ownerName = ownerInput.value.trim() || 'Walang Pangalan';
-            const expireDate = expireInput.value;
-
-            if (editIndex === "-1") {
-                // CREATE
-                const randomPart1 = Math.random().toString(36).substring(2, 8).toUpperCase();
-                const randomPart2 = Math.random().toString(36).substring(2, 8).toUpperCase();
-                const newKey = `KEY-${randomPart1}-${randomPart2}`;
-
-                keys.push({ owner: ownerName, key: newKey, expire: expireDate });
-            } else {
-                // UPDATE
-                keys[editIndex].owner = ownerName;
-                keys[editIndex].expire = expireDate;
+            try {
+                if (!editKeyId) {
+                    await fetch('/api/keys', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ owner, expire })
+                    });
+                } else {
+                    await fetch(`/api/keys/${encodeURIComponent(editKeyId)}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ owner, expire })
+                    });
+                }
+                resetForm();
+                fetchKeys();
+            } catch (err) {
+                alert('Error saving the key.');
             }
-
-            localStorage.setItem('admin_keys_v2', JSON.stringify(keys));
-            resetForm();
-            renderKeys();
         }
 
-        function editKey(index) {
-            const item = keys[index];
-            document.getElementById('keyOwner').value = item.owner;
-            document.getElementById('keyExpire').value = item.expire || '';
-            document.getElementById('editIndex').value = index;
+        function editKey(key, owner, expire) {
+            document.getElementById('keyOwner').value = owner;
+            document.getElementById('keyExpire').value = expire ? expire.split(' ')[0] : '';
+            document.getElementById('editKeyId').value = key;
 
-            document.getElementById('formTitle').innerText = "I-update ang Key";
-            document.getElementById('saveBtn').innerText = "I-save ang Pagbabago";
+            document.getElementById('formTitle').innerText = `Update Key: ${key}`;
+            document.getElementById('saveBtn').innerText = "Save Changes";
             document.getElementById('cancelBtn').classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function resetForm() {
             document.getElementById('keyOwner').value = '';
             document.getElementById('keyExpire').value = '';
-            document.getElementById('editIndex').value = "-1";
+            document.getElementById('editKeyId').value = '';
 
-            document.getElementById('formTitle').innerText = "Gumawa ng Bagong Key";
-            document.getElementById('saveBtn').innerText = "Mag-generate / I-save";
+            document.getElementById('formTitle').innerText = "Create New License Key";
+            document.getElementById('saveBtn').innerText = "Generate Key";
             document.getElementById('cancelBtn').classList.add('hidden');
         }
 
-        function deleteKey(index) {
-            if (confirm('Sigurado ka bang gusto mong tanggalin ang key na ito?')) {
-                keys.splice(index, 1);
-                localStorage.setItem('admin_keys_v2', JSON.stringify(keys));
-                renderKeys();
+        async function deleteKey(key) {
+            if (confirm(`Are you sure you want to delete the key "${key}"?`)) {
+                try {
+                    await fetch(`/api/keys/${encodeURIComponent(key)}`, {
+                        method: 'DELETE'
+                    });
+                    fetchKeys();
+                } catch (err) {
+                    alert('Error deleting the key.');
+                }
             }
         }
     </script>

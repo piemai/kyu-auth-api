@@ -23,7 +23,7 @@ def save_db(data):
 # --- FRONTEND ROUTE ---
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return render_template('admin.html')
 
 # --- ADMIN API ROUTES ---
 @app.route('/api/login', methods=['POST'])

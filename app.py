@@ -1,11 +1,13 @@
 import os
 import json
+import random
+import string
 from flask import Flask, request, jsonify, render_template
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 DB_FILE = 'keys.json'
-ADMIN_PASSWORD = "admin123"  # Pwede mong palitan ang password na ito
+ADMIN_PASSWORD = "admin123"
 
 def load_db():
     if not os.path.exists(DB_FILE):
@@ -20,66 +22,99 @@ def save_db(data):
     with open(DB_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
-# --- FRONTEND ROUTE ---
+def calculate_expiration(amount, unit):
+    if not amount or unit == 'lifetime':
+        return ""
+    try:
+        val = int(amount)
+        now = datetime.now()
+        if unit == 'minutes':
+            exp = now + timedelta(minutes=val)
+        elif unit == 'hours':
+            exp = now + timedelta(hours=val)
+        elif unit == 'days':
+            exp = now + timedelta(days=val)
+        elif unit == 'months':
+            exp = now + timedelta(days=val * 30)
+        elif unit == 'years':
+            exp = now + timedelta(days=val * 365)
+        else:
+            return ""
+        return exp.strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        return ""
+
 @app.route('/')
 def home():
     return render_template('admin.html')
 
-# --- ADMIN API ROUTES ---
 @app.route('/api/login', methods=['POST'])
 def api_login():
     data = request.get_json() or {}
     if data.get('password') == ADMIN_PASSWORD:
         return jsonify({"success": True})
-    return jsonify({"success": False, "message": "Maling password!"})
+    return jsonify({"success": False, "message": "Incorrect password!"})
 
 @app.route('/api/keys', methods=['GET', 'POST'])
 def handle_keys():
     keys_data = load_db()
 
     if request.method == 'GET':
-        # I-format ang data para madaling basahin sa admin panel table
         result = []
+        now = datetime.now()
+        updated = False
+
         for key, info in keys_data.items():
+            expires_at = info.get('expires_at', '')
+            status = info.get('status', 'active')
+
+            # Auto-check kung expired na
+            if expires_at and status == 'active':
+                try:
+                    exp_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
+                    if now > exp_time:
+                        status = 'expired'
+                        keys_data[key]['status'] = 'expired'
+                        updated = True
+                except Exception:
+                    pass
+
             result.append({
                 "key": key,
-                "owner": info.get('owner', 'Walang Pangalan'),
-                "expire": info.get('expires_at', ''),
-                "status": info.get('status', 'active'),
+                "expires_at": expires_at,
+                "status": status,
                 "device_id": info.get('device_id', '')
             })
+
+        if updated:
+            save_db(keys_data)
+
         return jsonify({"success": True, "keys": result})
 
     elif request.method == 'POST':
         data = request.get_json() or {}
-        owner = data.get('owner', 'Walang Pangalan')
-        expire = data.get('expire', '') # Format: YYYY-MM-DD o YYYY-MM-DD HH:MM:SS
-        custom_key = data.get('key')
-
-        # Kung may expiration date, lagyan natin ng default time na 23:59:59 kung date lang binigay
-        formatted_expire = ""
-        if expire:
-            if len(expire) == 10:  # YYYY-MM-DD format
-                formatted_expire = f"{expire} 23:59:59"
-            else:
-                formatted_expire = expire
+        custom_key = str(data.get('key', '')).strip()
+        duration_val = data.get('duration_val', '1')
+        duration_unit = data.get('duration_unit', 'lifetime')
 
         # Gumawa ng random key kung walang binigay
         if not custom_key:
-            import random
-            import string
             part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
             part2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            custom_key = f"KEY-{part1}-{part2}"
+            custom_key = f"KYU-{part1}-{part2}"
+
+        if custom_key in keys_data:
+            return jsonify({"success": False, "message": "Key already exists!"})
+
+        formatted_expire = calculate_expiration(duration_val, duration_unit)
 
         keys_data[custom_key] = {
-            "owner": owner,
             "expires_at": formatted_expire,
             "status": "active",
             "device_id": ""
         }
         save_db(keys_data)
-        return jsonify({"success": True, "message": "Key created successfully", "key": custom_key})
+        return jsonify({"success": True, "message": "Key generated successfully", "key": custom_key})
 
 @app.route('/api/keys/<path:key_id>', methods=['PUT', 'DELETE'])
 def modify_key(key_id):
@@ -95,24 +130,22 @@ def modify_key(key_id):
 
     elif request.method == 'PUT':
         data = request.get_json() or {}
-        owner = data.get('owner')
-        expire = data.get('expire')
-        status = data.get('status')
+        action = data.get('action')
 
-        if owner is not None:
-            keys_data[key_id]['owner'] = owner
-        if expire is not None:
-            if len(expire) == 10:
-                keys_data[key_id]['expires_at'] = f"{expire} 23:59:59"
-            else:
-                keys_data[key_id]['expires_at'] = expire
-        if status is not None:
-            keys_data[key_id]['status'] = status
+        if action == 'reset_hwid':
+            keys_data[key_id]['device_id'] = ""
+            save_db(keys_data)
+            return jsonify({"success": True, "message": "Device HWID reset successfully"})
+
+        duration_val = data.get('duration_val', '1')
+        duration_unit = data.get('duration_unit', 'lifetime')
+
+        keys_data[key_id]['expires_at'] = calculate_expiration(duration_val, duration_unit)
+        keys_data[key_id]['status'] = 'active'
 
         save_db(keys_data)
         return jsonify({"success": True, "message": "Key updated successfully"})
 
-# --- ORIGINAL VERIFY ROUTE ---
 @app.route('/verify.php', methods=['POST'])
 def verify_key():
     data = request.get_json() or {}
@@ -132,7 +165,6 @@ def verify_key():
     if key_info.get('status') != 'active':
         return jsonify({"success": False, "message": "License key is expired or inactive."})
 
-    # Check expiration time if not lifetime
     expires_at = key_info.get('expires_at', '')
     if expires_at:
         try:
@@ -144,7 +176,6 @@ def verify_key():
         except Exception:
             pass
 
-    # Hardware ID Binding
     stored_device = key_info.get('device_id', '')
     if not stored_device:
         key_info['device_id'] = device_id

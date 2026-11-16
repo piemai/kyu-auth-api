@@ -10,9 +10,10 @@ app = Flask(__name__)
 DB_FILE = 'keys.json'
 ADMIN_PASSWORD = "admin123"
 
-# Bagong Telegram Bot Token at Chat ID
-TELEGRAM_BOT_TOKEN = "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg"
-TELEGRAM_CHAT_ID = "6516330870"
+# Ligtas na pagkuha ng Telegram credentials mula sa Environment Variables (Render)
+# O kaya ay ilagay ang iyong bagong token dito kung locally mo muna ita-try
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "6516330870")
 
 def send_telegram_alert(message):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -154,7 +155,6 @@ def handle_keys():
             
             keys_formatted = "\n".join([f"<code>{k}</code>" for k in created_keys])
             
-            # Detalyadong description para sa Telegram Notification
             tg_msg = (
                 f"<b>⚡ KYU AUTH - LICENSE GENERATOR ⚡</b>\n\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"

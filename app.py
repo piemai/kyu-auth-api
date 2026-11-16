@@ -10,7 +10,8 @@ app = Flask(__name__)
 DB_FILE = 'keys.json'
 ADMIN_PASSWORD = "admin123"
 
-TELEGRAM_BOT_TOKEN = "9198628207:AAH3PsBEh6S5Xo7SytUohMD3Of95d9eGTbQ"
+# Bagong Telegram Bot Token at Chat ID
+TELEGRAM_BOT_TOKEN = "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg"
 TELEGRAM_CHAT_ID = "6516330870"
 
 def send_telegram_alert(message):
@@ -113,7 +114,7 @@ def handle_keys():
         duration_unit = data.get('duration_unit', 'lifetime')
         quantity = min(max(int(data.get('quantity', 1)), 1), 100)
         notify_tg = data.get('notify_tg', False)
-        client_tz = data.get('timezone', 'UTC')
+        client_tz = data.get('timezone', 'Local')
 
         exp_ts = calculate_expiration_utc(duration_val, duration_unit)
         created_keys = []
@@ -147,16 +148,24 @@ def handle_keys():
 
         if notify_tg and created_keys:
             if exp_ts:
-                exp_label = f"{duration_val} {duration_unit} (UTC Timestamp: {exp_ts})"
+                exp_label = f"{duration_val} {duration_unit.capitalize()}"
             else:
-                exp_label = "Lifetime"
+                exp_label = "Lifetime (No Expiry)"
+            
             keys_formatted = "\n".join([f"<code>{k}</code>" for k in created_keys])
+            
+            # Detalyadong description para sa Telegram Notification
             tg_msg = (
-                f"<b>🔑 NEW LICENSE KEY(S) GENERATED</b>\n\n"
-                f"📦 <b>Quantity:</b> {len(created_keys)}\n"
-                f"⏳ <b>Duration:</b> {exp_label}\n"
-                f"🌍 <b>Creator Timezone:</b> {client_tz}\n\n"
-                f"<b>Keys:</b>\n{keys_formatted}"
+                f"<b>⚡ KYU AUTH - LICENSE GENERATOR ⚡</b>\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📦 <b>Total Generated:</b> <code>{len(created_keys)} key(s)</code>\n"
+                f"⏳ <b>Validity Duration:</b> <code>{exp_label}</code>\n"
+                f"🌍 <b>Admin Timezone:</b> <code>{client_tz}</code>\n"
+                f"🛡 <b>Security System:</b> HWID Bind Ready\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"🔑 <b>Generated License Keys:</b>\n"
+                f"{keys_formatted}\n\n"
+                f"💡 <i>Tip: Click any key above to copy instantly.</i>"
             )
             send_telegram_alert(tg_msg)
 

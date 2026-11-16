@@ -40,7 +40,8 @@ def calculate_expiration(amount, unit):
             exp = now + timedelta(days=val * 365)
         else:
             return ""
-        return exp.strftime('%Y-%m-%d %H:%M:%S')
+        # 12-hour format na may AM/PM (Halimbawa: 2026-11-16 11:30:00 PM)
+        return exp.strftime('%Y-%m-%d %I:%M:%S %p')
     except Exception:
         return ""
 
@@ -68,16 +69,24 @@ def handle_keys():
             expires_at = info.get('expires_at', '')
             status = info.get('status', 'active')
 
-            # Auto-check kung expired na
+            # Auto-check kung expired na gamit ang 12-hour format parser
             if expires_at and status == 'active':
                 try:
-                    exp_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
+                    exp_time = datetime.strptime(expires_at, '%Y-%m-%d %I:%M:%S %p')
                     if now > exp_time:
                         status = 'expired'
                         keys_data[key]['status'] = 'expired'
                         updated = True
                 except Exception:
-                    pass
+                    try:
+                        # Fallback sakaling may lumang 24-hour format sa keys.json
+                        exp_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
+                        if now > exp_time:
+                            status = 'expired'
+                            keys_data[key]['status'] = 'expired'
+                            updated = True
+                    except Exception:
+                        pass
 
             result.append({
                 "key": key,
@@ -97,7 +106,6 @@ def handle_keys():
         duration_val = data.get('duration_val', '1')
         duration_unit = data.get('duration_unit', 'lifetime')
 
-        # Gumawa ng random key kung walang binigay
         if not custom_key:
             part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
             part2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -168,13 +176,22 @@ def verify_key():
     expires_at = key_info.get('expires_at', '')
     if expires_at:
         try:
-            exp_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
+            # Subukan i-parse ang 12-hour format
+            exp_time = datetime.strptime(expires_at, '%Y-%m-%d %I:%M:%S %p')
             if datetime.now() > exp_time:
                 key_info['status'] = 'expired'
                 save_db(keys_data)
                 return jsonify({"success": False, "message": "License key has expired."})
         except Exception:
-            pass
+            try:
+                # Fallback sakaling lumang 24-hour format
+                exp_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
+                if datetime.now() > exp_time:
+                    key_info['status'] = 'expired'
+                    save_db(keys_data)
+                    return jsonify({"success": False, "message": "License key has expired."})
+            except Exception:
+                pass
 
     stored_device = key_info.get('device_id', '')
     if not stored_device:

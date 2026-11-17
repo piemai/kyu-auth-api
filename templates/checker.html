@@ -43,6 +43,7 @@
             padding: 24px;
             display: flex;
             justify-content: center;
+            transition: background-color 0.3s, color 0.3s;
         }
 
         .container {
@@ -59,12 +60,20 @@
             padding: 16px 24px;
             border-radius: 12px;
             border: 1px solid var(--border-color);
+            flex-wrap: wrap;
+            gap: 12px;
         }
 
         header h1 {
             margin: 0;
             font-size: 20px;
             color: var(--primary-color);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .card {
@@ -94,9 +103,8 @@
             color: var(--text-muted);
         }
 
-        textarea {
+        textarea, input[type="number"] {
             width: 100%;
-            height: 160px;
             padding: 12px;
             border: 1px solid var(--border-color);
             border-radius: 8px;
@@ -108,7 +116,8 @@
             resize: vertical;
         }
 
-        textarea:focus { outline: none; border-color: var(--primary-color); }
+        textarea { height: 160px; }
+        textarea:focus, input[type="number"]:focus { outline: none; border-color: var(--primary-color); }
 
         .stats-bar {
             display: flex;
@@ -159,6 +168,9 @@
         button:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .btn-danger { background-color: var(--danger-color); }
+        .btn-success { background-color: var(--success-color); }
+        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: var(--code-bg); }
 
         .table-responsive {
             overflow-x: auto;
@@ -196,8 +208,13 @@
 <body data-theme="light">
     <div class="container">
         <header>
-            <h1>⚡ Kyu Auth - Web Card Checker</h1>
-            <a href="/" style="color: var(--primary-color); text-decoration: none; font-weight: 600; font-size: 14px;">← Back to Admin Panel</a>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <h1>⚡ Kyu Auth - Web Card Checker</h1>
+                <a href="/" style="color: var(--primary-color); text-decoration: none; font-weight: 600; font-size: 14px;">← Admin</a>
+            </div>
+            <div class="header-actions">
+                <button class="btn-secondary" onclick="toggleTheme()">🌙 / ☀️</button>
+            </div>
         </header>
 
         <div class="card">
@@ -212,9 +229,16 @@
                 </div>
             </div>
 
-            <div style="margin-top: 16px; display: flex; gap: 10px;">
-                <button id="startBtn" onclick="startChecking()">Start Checking</button>
-                <button id="stopBtn" class="btn-danger" onclick="stopChecking()" disabled>Stop Checker</button>
+            <div style="margin-top: 16px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                <div style="max-width: 140px;">
+                    <label for="threadsInput">Threads</label>
+                    <input type="number" id="threadsInput" min="1" max="50" value="15">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 18px;">
+                    <button id="startBtn" onclick="startChecking()">Start Checking</button>
+                    <button id="stopBtn" class="btn-danger" onclick="stopChecking()" disabled>Stop Checker</button>
+                    <button class="btn-success" onclick="exportLiveCards()">📥 Download live.txt</button>
+                </div>
             </div>
         </div>
 
@@ -250,9 +274,23 @@
     <script>
         let eventSource = null;
 
+        document.addEventListener("DOMContentLoaded", () => {
+            const savedTheme = localStorage.getItem('kyu_theme') || 'light';
+            document.body.setAttribute('data-theme', savedTheme);
+        });
+
+        function toggleTheme() {
+            const body = document.body;
+            const currentTheme = body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('kyu_theme', newTheme);
+        }
+
         function startChecking() {
             const cards = document.getElementById('cardsInput').value.trim();
             const proxies = document.getElementById('proxiesInput').value.trim();
+            const threads = document.getElementById('threadsInput').value.trim();
 
             if (!cards) {
                 alert('Maglagay muna kahit isang card!');
@@ -273,7 +311,7 @@
             fetch('/api/checker/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cards, proxies })
+                body: JSON.stringify({ cards, proxies, threads })
             }).then(res => {
                 if (res.ok) {
                     eventSource = new EventSource('/api/checker/stream');
@@ -302,6 +340,10 @@
             document.getElementById('stopBtn').disabled = true;
         }
 
+        function exportLiveCards() {
+            window.location.href = '/api/checker/export';
+        }
+
         function updateResults(data) {
             if (data.status_msg) {
                 document.getElementById('proxyStatusBanner').innerText = data.status_msg;
@@ -325,6 +367,7 @@
             `;
             tbody.prepend(row);
 
+            document.getElementById('statTotal').innerText = data.total;
             document.getElementById('statChecked').innerText = data.checked;
             document.getElementById('statLive').innerText = data.live;
             document.getElementById('statDead').innerText = data.dead;

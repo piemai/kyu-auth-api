@@ -135,7 +135,7 @@
     <div id="authOverlay">
         <div class="auth-card">
             <h2>🔒 Kyu CVV Auth Gate</h2>
-            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Ilagay ang iyong License Key para ma-access ang Checker.</p>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Please enter your license key to access the checker.</p>
             <input type="text" id="licenseKeyInput" placeholder="KYU-XXXXXX-XXXXXX" style="margin-bottom: 14px; text-align: center; text-transform: uppercase;">
             <button onclick="verifyLicenseKey()" style="width: 100%;">Authenticate Key</button>
             <div id="authError" style="color: var(--danger-color); font-size: 12px; margin-top: 10px;"></div>
@@ -179,7 +179,7 @@
                 </div>
                 <div class="form-group">
                     <label for="proxiesInput">Proxies (Optional - Leave blank for Proxyless)</label>
-                    <textarea id="proxiesInput" placeholder="ip:port o ip:port:user:pass" style="height: 150px;"></textarea>
+                    <textarea id="proxiesInput" placeholder="ip:port or ip:port:user:pass" style="height: 150px;"></textarea>
                 </div>
             </div>
 
@@ -257,7 +257,7 @@
                     });
                     const data = await res.json();
                     if (!data.success) {
-                        alert('Ang iyong license key ay nag-expire na, dinelete, o ni-reset ng admin.');
+                        alert('Your license key has expired, been deleted, or been reset by the admin.');
                         sessionStorage.removeItem('kyu_verified_key');
                         window.location.reload();
                     }
@@ -294,7 +294,7 @@
             const key = document.getElementById('licenseKeyInput').value.trim();
             const errDiv = document.getElementById('authError');
             errDiv.innerText = '';
-            if (!key) { errDiv.innerText = 'Ilagay ang license key.'; return; }
+            if (!key) { errDiv.innerText = 'Please enter a license key.'; return; }
 
             const deviceId = navigator.userAgent + navigator.language + screen.width;
             fetch('/verify.php', {
@@ -307,9 +307,9 @@
                     document.getElementById('authOverlay').style.display = 'none';
                     startLicenseHeartbeat();
                 } else {
-                    errDiv.innerText = data.message || 'Invalid o expired ang key.';
+                    errDiv.innerText = data.message || 'Invalid or expired key.';
                 }
-            }).catch(() => { errDiv.innerText = 'May error sa server connection.'; });
+            }).catch(() => { errDiv.innerText = 'Server connection error.'; });
         }
 
         function toggleTheme() {
@@ -320,27 +320,47 @@
             localStorage.setItem('kyu_theme', newTheme);
         }
 
+        // High-accuracy BIN lookup using bincheck.io with binlist fallback
         async function fetchBinInfo(cardLine) {
             const cc = cardLine.split('|')[0].trim();
             const bin = cc.slice(0, 6);
             if (binCache[bin]) return binCache[bin];
 
             try {
-                const res = await fetch(`https://lookup.binlist.net/${bin}`, {
-                    headers: { 'Accept-Version': '3' }
-                });
+                const res = await fetch(`https://api.bincheck.io/v1/${bin}`);
                 if (res.ok) {
                     const data = await res.json();
-                    const info = {
-                        scheme: (data.scheme || 'unknown').toUpperCase(),
-                        type: (data.type || '').toUpperCase(),
-                        country: data.country ? `${data.country.emoji || ''} ${data.country.name || ''}` : 'Unknown',
-                        bank: data.bank ? data.bank.name : 'Unknown Bank'
-                    };
-                    binCache[bin] = info;
-                    return info;
+                    if (data && data.success) {
+                        const info = {
+                            scheme: (data.scheme || 'unknown').toUpperCase(),
+                            type: (data.type || '').toUpperCase(),
+                            country: data.country ? `${data.country.emoji || ''} ${data.country.name || ''}` : 'Unknown',
+                            bank: data.bank ? data.bank.name : 'Unknown Bank'
+                        };
+                        binCache[bin] = info;
+                        return info;
+                    }
                 }
             } catch (e) {}
+
+            // Fallback to binlist.net if bincheck.io fails
+            try {
+                const res2 = await fetch(`https://lookup.binlist.net/${bin}`, {
+                    headers: { 'Accept-Version': '3' }
+                });
+                if (res2.ok) {
+                    const data2 = await res2.json();
+                    const info2 = {
+                        scheme: (data2.scheme || 'unknown').toUpperCase(),
+                        type: (data2.type || '').toUpperCase(),
+                        country: data2.country ? `${data2.country.emoji || ''} ${data2.country.name || ''}` : 'Unknown',
+                        bank: data2.bank ? data2.bank.name : 'Unknown Bank'
+                    };
+                    binCache[bin] = info2;
+                    return info2;
+                }
+            } catch (e) {}
+
             return { scheme: cc.startsWith('4') ? 'VISA' : 'MC', type: '', country: 'Unknown', bank: 'Unknown Bank' };
         }
 
@@ -349,7 +369,7 @@
             const proxies = document.getElementById('proxiesInput').value.trim();
             const threads = document.getElementById('threadsInput').value.trim();
 
-            if (!cards) { alert('Maglagay muna kahit isang card!'); return; }
+            if (!cards) { alert('Please enter at least one card!'); return; }
 
             document.getElementById('statTotal').innerText = cards.split('\n').filter(Boolean).length;
             document.getElementById('statChecked').innerText = '0';

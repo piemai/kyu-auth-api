@@ -106,12 +106,12 @@ def fetch_bin_metadata(card_number: str) -> dict:
         r = requests.get(f"https://lookup.binlist.net/{bin_num}", headers={"Accept-Version": "3", "User-Agent": UA}, timeout=5)
         if r.status_code == 200:
             data = r.json()
-            meta["brand"] = (data.get("brand") or meta["brand"]).upper()
-            meta["type"] = (data.get("type") or "UNKNOWN").upper()
+            meta["brand"] = str(data.get("brand") or meta["brand"]).upper()
+            meta["type"] = str(data.get("type") or "UNKNOWN").upper()
             bank_info = data.get("bank", {})
-            meta["bank"] = (bank_info.get("name") or "UNKNOWN").upper()
+            meta["bank"] = str(bank_info.get("name") or "UNKNOWN").upper()
             country_info = data.get("country", {})
-            meta["country"] = (country_info.get("name") or "UNKNOWN").upper()
+            meta["country"] = str(country_info.get("name") or "UNKNOWN").upper()
             alpha2 = country_info.get("alpha2", "")
             if alpha2:
                 meta["flag"] = "".join(chr(ord(c) + 127397) for c in alpha2.upper())
@@ -277,4 +277,5 @@ def run_card(card: dict, token_mgr: TokenManager, country: str, pool: ProxyPool 
             return 1, "CARD_DECLINED", meta
         return 0, "APPROVED", meta
     except Exception as e:
-        return 2, f"{type(e).__name__}: {e}", meta
+        err_str = str(e).encode('ascii', 'ignore').decode('ascii')
+        return 2, f"{type(e).__name__}: {err_str}", meta

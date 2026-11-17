@@ -221,31 +221,40 @@ def modify_key(key_id):
 @app.route('/verify.php', methods=['POST'])
 def verify_key():
     data = request.get_json() or {}
-    incoming_key = str(data.get('key', '')).strip()
+    incoming_key = str(data.get('key', '')).strip().upper()
     device_id = str(data.get('device_id', '')).strip()
 
     if not incoming_key:
-        return jsonify({"success": False, "message": "Empty key."})
+        return jsonify({"success": False, "message": "Please enter a license key."})
+    
     keys_data = load_db()
-    if incoming_key not in keys_data:
-        return jsonify({"success": False, "message": "Invalid key."})
+    matched_key = None
+    for k in keys_data.keys():
+        if k.strip().upper() == incoming_key:
+            matched_key = k
+            break
 
-    key_info = keys_data[incoming_key]
+    if not matched_key:
+        return jsonify({"success": False, "message": "Invalid license key."})
+
+    key_info = keys_data[matched_key]
     if key_info.get('status') != 'active':
-        return jsonify({"success": False, "message": "Key inactive or expired."})
+        return jsonify({"success": False, "message": "Key is inactive or expired."})
 
     expires_ts = key_info.get('expires_ts')
-    if expires_ts and int(datetime.now(timezone.utc).timestamp()) > expires_ts:
-        key_info['status'] = 'expired'
-        save_db(keys_data)
-        return jsonify({"success": False, "message": "Key expired."})
+    if expires_ts:
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        if now_ts > expires_ts:
+            key_info['status'] = 'expired'
+            save_db(keys_data)
+            return jsonify({"success": False, "message": "License key has expired."})
 
     stored_device = key_info.get('device_id', '')
     if not stored_device:
         key_info['device_id'] = device_id
         save_db(keys_data)
     elif stored_device != device_id:
-        return jsonify({"success": False, "message": "HWID mismatch."})
+        return jsonify({"success": False, "message": "HWID mismatch (Bound to another device)."})
 
     return jsonify({"success": True, "expires_ts": expires_ts})
 

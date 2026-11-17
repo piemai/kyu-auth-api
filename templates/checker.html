@@ -307,7 +307,6 @@
             });
         }
 
-        // Non-blocking background BIN fetch
         async function fetchBinInfo(cardLine, cellId) {
             const cc = cardLine.split('|')[0].trim();
             const bin = cc.slice(0, 6);
@@ -424,7 +423,7 @@
             if (data.code === 0) badgeClass = 'badge-live';
             else if (data.code === 1) badgeClass = 'badge-dead';
 
-            const uniqueId = 'bin_' + Math.random().toString(36.substring(2, 9));
+            const uniqueId = 'bin_' + Math.random().toString(36).substring(2, 9);
 
             const row = document.createElement('tr');
             row.setAttribute('data-status', data.status);
@@ -440,8 +439,6 @@
             }
 
             tbody.prepend(row);
-
-            // Fetch BIN info asynchronously in background so it never blocks the checker thread
             fetchBinInfo(data.card, uniqueId);
 
             document.getElementById('statTotal').innerText = data.total;

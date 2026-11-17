@@ -171,7 +171,7 @@ def handle_keys():
         duration_val = data.get('duration_val', '1')
         duration_unit = data.get('duration_unit', 'lifetime')
         quantity = min(max(int(data.get('quantity', 1)), 1), 100)
-        notify_tg = data.get('notify_tg', False)
+        notify_tg = data.get('notify_tg', True)
 
         exp_ts = calculate_expiration_utc(duration_val, duration_unit)
         created_keys = []

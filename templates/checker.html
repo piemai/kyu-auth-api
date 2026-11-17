@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -43,7 +43,6 @@
             padding: 24px;
             display: flex;
             justify-content: center;
-            transition: background 0.3s, color 0.3s;
         }
 
         .container {
@@ -66,23 +65,6 @@
             margin: 0;
             font-size: 20px;
             color: var(--primary-color);
-        }
-
-        .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .theme-toggle {
-            background: var(--code-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 8px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
         }
 
         .card {
@@ -161,20 +143,6 @@
         .stat-dead { color: var(--danger-color); }
         .stat-error { color: var(--warning-color); }
 
-        .actions-bar {
-            margin-top: 16px; 
-            display: flex; 
-            gap: 10px; 
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .left-actions {
-            display: flex;
-            gap: 10px;
-        }
-
         button {
             background-color: var(--primary-color);
             color: white;
@@ -191,8 +159,6 @@
         button:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .btn-danger { background-color: var(--danger-color); }
-        .btn-secondary { background-color: var(--code-bg); color: var(--text-color); border: 1px solid var(--border-color); }
-        .btn-secondary:hover { background-color: var(--border-color); }
 
         .table-responsive {
             overflow-x: auto;
@@ -220,7 +186,6 @@
             font-size: 11px;
             position: sticky;
             top: 0;
-            z-index: 10;
         }
 
         .badge-live { color: var(--success-color); font-weight: bold; }
@@ -228,14 +193,11 @@
         .badge-error { color: var(--warning-color); font-weight: bold; }
     </style>
 </head>
-<body>
+<body data-theme="light">
     <div class="container">
         <header>
             <h1>⚡ Kyu Auth - Web Card Checker</h1>
-            <div class="header-actions">
-                <button class="theme-toggle" onclick="toggleTheme()" id="themeToggleBtn">🌙 Dark Mode</button>
-                <a href="/" style="color: var(--primary-color); text-decoration: none; font-weight: 600; font-size: 14px;">← Back</a>
-            </div>
+            <a href="/" style="color: var(--primary-color); text-decoration: none; font-weight: 600; font-size: 14px;">← Back to Admin Panel</a>
         </header>
 
         <div class="card">
@@ -250,23 +212,14 @@
                 </div>
             </div>
 
-            <div class="actions-bar">
-                <div class="left-actions">
-                    <button id="startBtn" onclick="startChecking()">Start Checking</button>
-                    <button id="stopBtn" class="btn-danger" onclick="stopChecking()" disabled>Stop Checker</button>
-                </div>
-                <div>
-                    <button class="btn-secondary" onclick="clearInputs()">Clear Inputs</button>
-                </div>
+            <div style="margin-top: 16px; display: flex; gap: 10px;">
+                <button id="startBtn" onclick="startChecking()">Start Checking</button>
+                <button id="stopBtn" class="btn-danger" onclick="stopChecking()" disabled>Stop Checker</button>
             </div>
         </div>
 
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h3 style="margin: 0;">Live Results</h3>
-                <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="exportResults()">Export Live</button>
-            </div>
-            
+            <h3>Live Results</h3>
             <div class="stats-bar">
                 <div class="stat-box"><span>Total</span><strong id="statTotal">0</strong></div>
                 <div class="stat-box"><span>Checked</span><strong id="statChecked">0</strong></div>
@@ -295,28 +248,6 @@
     <script>
         let eventSource = null;
 
-        // Theme management
-        function toggleTheme() {
-            const html = document.documentElement;
-            const currentTheme = html.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            html.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            document.getElementById('themeToggleBtn').innerText = newTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-        }
-
-        // Load saved theme preference
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-            document.getElementById('themeToggleBtn').innerText = savedTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-        });
-
-        function clearInputs() {
-            document.getElementById('cardsInput').value = '';
-            document.getElementById('proxiesInput').value = '';
-        }
-
         function startChecking() {
             const cards = document.getElementById('cardsInput').value.trim();
             const proxies = document.getElementById('proxiesInput').value.trim();
@@ -337,41 +268,26 @@
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
 
-            // Send payload safely with UTF-8 encoding configuration headers
+            // I-send sa Flask backend gamit ang POST tapos makikinig sa SSE
             fetch('/api/checker/start', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cards, proxies })
             }).then(res => {
                 if (res.ok) {
-                    if (eventSource) eventSource.close();
                     eventSource = new EventSource('/api/checker/stream');
-                    
                     eventSource.onmessage = function(event) {
-                        try {
-                            const data = JSON.parse(event.data);
-                            if (data.finished) {
-                                stopChecking();
-                                return;
-                            }
-                            updateResults(data);
-                        } catch (e) {
-                            console.error("Stream parse error:", e);
+                        const data = JSON.parse(event.data);
+                        if (data.finished) {
+                            stopChecking();
+                            return;
                         }
-                    };
-
-                    eventSource.onerror = function() {
-                        console.error("EventSource connection lost or finished.");
-                        stopChecking();
+                        updateResults(data);
                     };
                 } else {
                     alert('Error starting checker.');
                     stopChecking();
                 }
-            }).catch(err => {
-                console.error("Fetch error:", err);
-                alert('Network connection error.');
-                stopChecking();
             });
         }
 
@@ -380,7 +296,7 @@
                 eventSource.close();
                 eventSource = null;
             }
-            fetch('/api/checker/stop', { method: 'POST' }).catch(() => {});
+            fetch('/api/checker/stop', { method: 'POST' });
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
         }
@@ -397,48 +313,17 @@
 
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td><code>${escapeHtml(data.card)}</code></td>
-                <td><span class="${badgeClass}">${escapeHtml(data.status)}</span></td>
-                <td>${escapeHtml(data.detail)}</td>
+                <td><code>${data.card}</code></td>
+                <td><span class="${badgeClass}">${data.status}</span></td>
+                <td>${data.detail}</td>
             `;
             tbody.prepend(row);
 
             // Update stats
-            document.getElementById('statChecked').innerText = data.checked || '0';
-            document.getElementById('statLive').innerText = data.live || '0';
-            document.getElementById('statDead').innerText = data.dead || '0';
-            document.getElementById('statError').innerText = data.error || '0';
-        }
-
-        function exportResults() {
-            const rows = document.querySelectorAll('#resultsTable tr');
-            let content = '';
-            rows.forEach(row => {
-                const cols = row.querySelectorAll('td');
-                if (cols.length === 3) {
-                    content += `${cols[0].innerText} | ${cols[1].innerText} | ${cols.innerText}\n`;
-                }
-            });
-            if (!content) {
-                alert('Walang ma-export na resulta.');
-                return;
-            }
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'checker_results.txt';
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/&/g, "&amp;")
-                      .replace(/</g, "&lt;")
-                      .replace(/>/g, "&gt;")
-                      .replace(/"/g, "&quot;")
-                      .replace(грg, "&#039;");
+            document.getElementById('statChecked').innerText = data.checked;
+            document.getElementById('statLive').innerText = data.live;
+            document.getElementById('statDead').innerText = data.dead;
+            document.getElementById('statError').innerText = data.error;
         }
     </script>
 </body>

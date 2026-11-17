@@ -2,3 +2,5 @@ flask
 gunicorn
 requests
 python-jose
+cryptography
+urllib3

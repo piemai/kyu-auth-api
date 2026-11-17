@@ -1,7 +1,8 @@
 {
-    "": {
-        "status": "active",
-        "device_id": "",
-        "expires_at": ""
+    "keys": {
+        "KYU-VIP-2026": {
+            "expires_ts": 1794572402,
+            "active": true
+        }
     }
 }

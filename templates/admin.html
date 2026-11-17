@@ -101,6 +101,12 @@
         }
         input:focus, select:focus { outline: none; border-color: var(--primary-color); }
 
+        .checkbox-group {
+            display: flex; align-items: center; gap: 8px; font-size: 13px;
+            color: var(--text-color); margin-bottom: 16px; cursor: pointer;
+        }
+        .checkbox-group input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary-color); }
+
         button {
             background: var(--accent-gradient); color: white; border: none;
             padding: 10px 16px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13px;
@@ -209,6 +215,11 @@
                     <input type="number" id="keyQuantity" min="1" max="100" value="1">
                 </div>
             </div>
+
+            <label class="checkbox-group" id="tgNotifyGroup">
+                <input type="checkbox" id="notifyTg" checked>
+                <span>Send generated key(s) to Telegram Bot</span>
+            </label>
             
             <div style="display: flex; gap: 10px;">
                 <button id="saveBtn" onclick="saveKey()">Create Key(s)</button>
@@ -421,6 +432,7 @@
             const durationVal = document.getElementById('durationVal').value;
             const durationUnit = document.getElementById('durationUnit').value;
             const quantity = parseInt(document.getElementById('keyQuantity').value) || 1;
+            const notifyTg = document.getElementById('notifyTg').checked;
             const editKeyId = document.getElementById('editKeyId').value;
 
             try {
@@ -428,7 +440,7 @@
                 if (!editKeyId) {
                     res = await fetch('/api/keys', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key: customKey, duration_val: durationVal, duration_unit: durationUnit, quantity: quantity, notify_tg: false, timezone: userTimezone })
+                        body: JSON.stringify({ key: customKey, duration_val: durationVal, duration_unit: durationUnit, quantity: quantity, notify_tg: notifyTg, timezone: userTimezone })
                     });
                 } else {
                     res = await fetch(`/api/keys/${encodeURIComponent(editKeyId)}`, {
@@ -452,6 +464,7 @@
             document.getElementById('editKeyId').value = key;
             document.getElementById('keyInputGroup').classList.add('hidden');
             document.getElementById('quantityGroup').classList.add('hidden');
+            document.getElementById('tgNotifyGroup').classList.add('hidden');
             document.getElementById('batchResultBox').classList.add('hidden');
             document.getElementById('formTitle').innerText = `Update Duration for: ${key}`;
             document.getElementById('saveBtn').innerText = "Update Duration";
@@ -476,6 +489,7 @@
             document.getElementById('editKeyId').value = '';
             document.getElementById('keyInputGroup').classList.remove('hidden');
             document.getElementById('quantityGroup').classList.remove('hidden');
+            document.getElementById('tgNotifyGroup').classList.remove('hidden');
             if (hideBatch) document.getElementById('batchResultBox').classList.add('hidden');
             document.getElementById('formTitle').innerText = "Generate License Key(s)";
             document.getElementById('saveBtn').innerText = "Create Key(s)";

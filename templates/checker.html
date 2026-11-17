@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,7 +18,6 @@
             --border-color: #e2e8f0;
             --table-header: #f1f5f9;
             --code-bg: #f1f5f9;
-            --shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         [data-theme="dark"] {
@@ -34,18 +33,16 @@
             --border-color: #334155;
             --table-header: #334155;
             --code-bg: #334155;
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
         }
 
         body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
             padding: 24px;
             display: flex;
             justify-content: center;
-            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         .container {
@@ -62,7 +59,6 @@
             padding: 16px 24px;
             border-radius: 12px;
             border: 1px solid var(--border-color);
-            box-shadow: var(--shadow);
         }
 
         header h1 {
@@ -71,39 +67,13 @@
             color: var(--primary-color);
         }
 
-        .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .theme-toggle {
-            background: var(--code-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 8px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: background 0.2s;
-        }
-
-        .theme-toggle:hover {
-            background: var(--border-color);
-        }
-
         .card {
             background-color: var(--card-bg);
             border-radius: 12px;
             padding: 24px;
             margin-bottom: 24px;
             border: 1px solid var(--border-color);
-            box-shadow: var(--shadow);
-            transition: background-color 0.3s ease, border-color 0.3s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         .grid-2 {
@@ -136,7 +106,6 @@
             font-size: 13px;
             box-sizing: border-box;
             resize: vertical;
-            transition: border-color 0.2s, background-color 0.2s;
         }
 
         textarea:focus { outline: none; border-color: var(--primary-color); }
@@ -163,7 +132,6 @@
             font-size: 12px;
             color: var(--text-muted);
             text-transform: uppercase;
-            font-weight: 600;
         }
 
         .stat-box strong {
@@ -175,12 +143,6 @@
         .stat-dead { color: var(--danger-color); }
         .stat-error { color: var(--warning-color); }
 
-        .btn-group {
-            margin-top: 16px;
-            display: flex;
-            gap: 10px;
-        }
-
         button {
             background-color: var(--primary-color);
             color: white;
@@ -190,14 +152,13 @@
             cursor: pointer;
             font-weight: 600;
             font-size: 14px;
-            transition: background 0.2s, opacity 0.2s;
+            transition: background 0.2s;
         }
 
         button:hover { background-color: var(--primary-hover); }
         button:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .btn-danger { background-color: var(--danger-color); }
-        .btn-danger:hover { background-color: #dc2626; }
 
         .table-responsive {
             overflow-x: auto;
@@ -225,7 +186,6 @@
             font-size: 11px;
             position: sticky;
             top: 0;
-            z-index: 10;
         }
 
         .badge-live { color: var(--success-color); font-weight: bold; }
@@ -233,14 +193,11 @@
         .badge-error { color: var(--warning-color); font-weight: bold; }
     </style>
 </head>
-<body>
+<body data-theme="light">
     <div class="container">
         <header>
             <h1>⚡ Kyu Auth - Web Card Checker</h1>
-            <div class="header-actions">
-                <button class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()">🌙 Dark Mode</button>
-                <a href="/" style="color: var(--primary-color); text-decoration: none; font-weight: 600; font-size: 14px;">← Back to Admin Panel</a>
-            </div>
+            <a href="/" style="color: var(--primary-color); text-decoration: none; font-weight: 600; font-size: 14px;">← Back to Admin Panel</a>
         </header>
 
         <div class="card">
@@ -255,7 +212,7 @@
                 </div>
             </div>
 
-            <div class="btn-group">
+            <div style="margin-top: 16px; display: flex; gap: 10px;">
                 <button id="startBtn" onclick="startChecking()">Start Checking</button>
                 <button id="stopBtn" class="btn-danger" onclick="stopChecking()" disabled>Stop Checker</button>
             </div>
@@ -291,25 +248,6 @@
     <script>
         let eventSource = null;
 
-        // Theme management
-        function toggleTheme() {
-            const body = document.body;
-            const currentTheme = body.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            body.setAttribute('data-theme', newTheme);
-            localStorage.setItem('kyu_theme', newTheme);
-            
-            const btn = document.getElementById('themeToggleBtn');
-            btn.innerHTML = newTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-        }
-
-        // Initialize saved theme
-        (function() {
-            const savedTheme = localStorage.getItem('kyu_theme') || 'light';
-            document.body.setAttribute('data-theme', savedTheme);
-            document.getElementById('themeToggleBtn').innerHTML = savedTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-        })();
-
         function startChecking() {
             const cards = document.getElementById('cardsInput').value.trim();
             const proxies = document.getElementById('proxiesInput').value.trim();
@@ -330,6 +268,7 @@
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
 
+            // I-send sa Flask backend gamit ang POST tapos makikinig sa SSE
             fetch('/api/checker/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -349,9 +288,6 @@
                     alert('Error starting checker.');
                     stopChecking();
                 }
-            }).catch(err => {
-                console.error(err);
-                stopChecking();
             });
         }
 
@@ -360,7 +296,7 @@
                 eventSource.close();
                 eventSource = null;
             }
-            fetch('/api/checker/stop', { method: 'POST' }).catch(() => {});
+            fetch('/api/checker/stop', { method: 'POST' });
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
         }
@@ -373,29 +309,21 @@
 
             let badgeClass = 'badge-error';
             if (data.code === 0) badgeClass = 'badge-live';
-            else if (data.code === 1) badgeClass, badgeClass = 'badge-dead';
+            else if (data.code === 1) badgeClass = 'badge-dead';
 
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td><code>${escapeHtml(data.card)}</code></td>
-                <td><span class="${badgeClass}">${escapeHtml(data.status)}</span></td>
-                <td>${escapeHtml(data.detail)}</td>
+                <td><code>${data.card}</code></td>
+                <td><span class="${badgeClass}">${data.status}</span></td>
+                <td>${data.detail}</td>
             `;
             tbody.prepend(row);
 
+            // Update stats
             document.getElementById('statChecked').innerText = data.checked;
             document.getElementById('statLive').innerText = data.live;
             document.getElementById('statDead').innerText = data.dead;
             document.getElementById('statError').innerText = data.error;
-        }
-
-        function escapeHtml(str) {
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(>g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
         }
     </script>
 </body>

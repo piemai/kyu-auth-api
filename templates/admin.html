@@ -6,31 +6,10 @@
     <title>Kyu CVV Auth - Pro License Manager</title>
     <style>
         :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --text-color: #f8fafc;
-            --text-muted: #94a3b8;
-            --primary-color: #8b5cf6;
-            --primary-hover: #7c3aed;
-            --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-            --danger-color: #f87171;
-            --danger-hover: #ef4444;
-            --warning-color: #fbbf24;
-            --warning-hover: #f59e0b;
-            --border-color: #334155;
-            --table-header: #334155;
-            --code-bg: #090d16;
-            --badge-active-bg: #064e3b;
-            --badge-active-text: #6ee7b7;
-            --badge-expired-bg: #7f1d1d;
-            --badge-expired-text: #fca5a5;
-        }
-
-        [data-theme="light"] {
-            --bg-color: #f8fafc;
+            --bg-color: #f5f3ff;
             --card-bg: #ffffff;
-            --text-color: #1e293b;
-            --text-muted: #64748b;
+            --text-color: #1e1b4b;
+            --text-muted: #6b7280;
             --primary-color: #7c3aed;
             --primary-hover: #6d28d9;
             --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
@@ -38,17 +17,38 @@
             --danger-hover: #dc2626;
             --warning-color: #f59e0b;
             --warning-hover: #d97706;
-            --border-color: #e2e8f0;
-            --table-header: #f1f5f9;
-            --code-bg: #f8fafc;
+            --border-color: #ddd6fe;
+            --table-header: #ede9fe;
+            --code-bg: #faf5ff;
             --badge-active-bg: #dcfce7;
             --badge-active-text: #166534;
             --badge-expired-bg: #fee2e2;
             --badge-expired-text: #991b1b;
         }
 
+        [data-theme="dark"] {
+            --bg-color: #09090b;
+            --card-bg: #18181b;
+            --text-color: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --primary-color: #8b5cf6;
+            --primary-hover: #7c3aed;
+            --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            --danger-color: #f87171;
+            --danger-hover: #ef4444;
+            --warning-color: #fbbf24;
+            --warning-hover: #f59e0b;
+            --border-color: #27272a;
+            --table-header: #27272a;
+            --code-bg: #1f1f23;
+            --badge-active-bg: #064e3b;
+            --badge-active-text: #6ee7b7;
+            --badge-expired-bg: #7f1d1d;
+            --badge-expired-text: #fca5a5;
+        }
+
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
@@ -62,8 +62,8 @@
 
         header {
             display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 24px; background: var(--card-bg); padding: 18px 24px;
-            border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px; background: var(--card-bg); padding: 16px 24px;
+            border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.05);
             border: 1px solid var(--border-color); flex-wrap: wrap; gap: 12px;
         }
 
@@ -80,18 +80,16 @@
         .header-actions { display: flex; align-items: center; gap: 10px; }
 
         .card {
-            background-color: var(--card-bg); border-radius: 14px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); padding: 24px;
-            margin-bottom: 24px; border: 1px solid var(--border-color);
+            background-color: var(--card-bg); border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+            padding: 24px; margin-bottom: 24px; border: 1px solid var(--border-color);
         }
 
-        .card h3 { margin-top: 0; margin-bottom: 18px; font-size: 16px; font-weight: 600; }
+        .card h3 { margin-top: 0; margin-bottom: 18px; font-size: 16px; font-weight: 600; color: var(--text-color); }
 
         .form-grid { display: grid; grid-template-columns: 1.5fr 1fr 0.7fr; gap: 16px; }
         @media (max-width: 800px) { .form-grid { grid-template-columns: 1fr; } }
 
         .form-group { margin-bottom: 16px; }
-
         label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px; color: var(--text-muted); }
 
         .input-group { display: flex; gap: 8px; }
@@ -101,26 +99,19 @@
             border-radius: 10px; box-sizing: border-box; font-size: 14px;
             background-color: var(--code-bg); color: var(--text-color); transition: border-color 0.2s;
         }
-
         input:focus, select:focus { outline: none; border-color: var(--primary-color); }
-
-        .checkbox-group {
-            display: flex; align-items: center; gap: 8px; font-size: 13px;
-            color: var(--text-color); margin-bottom: 16px; cursor: pointer;
-        }
-        .checkbox-group input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary-color); }
 
         button {
             background: var(--accent-gradient); color: white; border: none;
             padding: 10px 16px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13px;
-            white-space: nowrap; transition: opacity 0.2s, transform 0.1s; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+            white-space: nowrap; transition: opacity 0.2s, transform 0.1s; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
         }
         button:active { transform: scale(0.98); }
         button:hover { opacity: 0.9; }
 
         .btn-sm { padding: 6px 10px; font-size: 12px; }
-        .btn-danger { background-color: var(--danger-color); box-shadow: 0 4px 12px rgba(248, 113, 113, 0.3); }
-        .btn-warning { background-color: var(--warning-color); color: white; box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3); }
+        .btn-danger { background-color: var(--danger-color); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+        .btn-warning { background-color: var(--warning-color); color: white; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
         .btn-secondary { background-color: transparent; color: var(--text-color); border: 1px solid var(--border-color); box-shadow: none; }
         .btn-secondary:hover { background-color: var(--code-bg); }
 
@@ -146,19 +137,16 @@
             font-family: monospace; background-color: var(--code-bg); padding: 5px 10px;
             border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-block; cursor: pointer; border: 1px solid var(--border-color);
         }
-        .key-text:hover { opacity: 0.8; }
         .countdown-text { font-family: monospace; font-weight: 600; color: var(--primary-color); }
-
         .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
         .badge-active { background-color: var(--badge-active-bg); color: var(--badge-active-text); }
         .badge-expired { background-color: var(--badge-expired-bg); color: var(--badge-expired-text); }
-
         .action-buttons { display: flex; gap: 6px; }
         .empty-state { text-align: center; color: var(--text-muted); padding: 32px; }
         .hidden { display: none !important; }
     </style>
 </head>
-<body data-theme="dark">
+<body data-theme="light">
 
     <!-- LOGIN SCREEN -->
     <div id="loginScreen" class="container" style="max-width: 400px; margin-top: 80px;">
@@ -187,23 +175,7 @@
             </div>
         </header>
 
-        <!-- Telegram Config Card -->
-        <div class="card">
-            <h3>🤖 Telegram Auto-Sender Configuration</h3>
-            <div class="form-grid" style="grid-template-columns: 2fr 1.5fr 0.8fr; align-items: flex-end;">
-                <div class="form-group" style="margin-bottom:0;">
-                    <label for="tgTokenInput">Telegram Bot Token</label>
-                    <input type="text" id="tgTokenInput" placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ">
-                </div>
-                <div class="form-group" style="margin-bottom:0;">
-                    <label for="tgChatIdInput">Telegram Chat ID</label>
-                    <input type="text" id="tgChatIdInput" placeholder="-1001234567890">
-                </div>
-                <button onclick="saveTelegramConfig()" style="height: 42px;">Save Settings</button>
-            </div>
-        </div>
-
-        <!-- Generator / Update Form -->
+        <!-- Generator Form -->
         <div class="card">
             <h3 id="formTitle">Generate License Key(s)</h3>
             <input type="hidden" id="editKeyId" value="">
@@ -237,11 +209,6 @@
                     <input type="number" id="keyQuantity" min="1" max="100" value="1">
                 </div>
             </div>
-
-            <label class="checkbox-group" id="tgNotifyGroup">
-                <input type="checkbox" id="notifyTg" checked>
-                <span>Send generated key(s) to Telegram Bot</span>
-            </label>
             
             <div style="display: flex; gap: 10px;">
                 <button id="saveBtn" onclick="saveKey()">Create Key(s)</button>
@@ -297,7 +264,7 @@
         const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
 
         document.addEventListener("DOMContentLoaded", () => {
-            const savedTheme = localStorage.getItem('kyu_theme') || 'dark';
+            const savedTheme = localStorage.getItem('kyu_theme') || 'light';
             document.body.setAttribute('data-theme', savedTheme);
 
             if (sessionStorage.getItem('is_logged_in') === 'true') {
@@ -305,20 +272,13 @@
             }
         });
 
-        function handleLoginEnter(e) {
-            if (e.key === 'Enter') login();
-        }
+        function handleLoginEnter(e) { if (e.key === 'Enter') login(); }
 
         function toggleDurationInput() {
             const unit = document.getElementById('durationUnit').value;
             const valInput = document.getElementById('durationVal');
-            if (unit === 'lifetime') {
-                valInput.disabled = true;
-                valInput.style.opacity = '0.5';
-            } else {
-                valInput.disabled = false;
-                valInput.style.opacity = '1';
-            }
+            if (unit === 'lifetime') { valInput.disabled = true; valInput.style.opacity = '0.5'; }
+            else { valInput.disabled = false; valInput.style.opacity = '1'; }
         }
 
         function fillRandomKey() {
@@ -332,14 +292,9 @@
             document.getElementById('keyQuantity').value = 1;
         }
 
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text);
-            alert(`Copied: ${text}`);
-        }
-
+        function copyToClipboard(text) { navigator.clipboard.writeText(text); alert(`Copied: ${text}`); }
         function copyBatchKeys() {
-            const text = document.getElementById('batchKeysOutput').value;
-            navigator.clipboard.writeText(text);
+            navigator.clipboard.writeText(document.getElementById('batchKeysOutput').value);
             alert('All generated keys copied to clipboard!');
         }
 
@@ -347,20 +302,13 @@
             const password = document.getElementById('loginPassword').value;
             try {
                 const res = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password })
                 });
                 const data = await res.json();
-                if (data.success) {
-                    sessionStorage.setItem('is_logged_in', 'true');
-                    showAdminPanel();
-                } else {
-                    alert(data.message);
-                }
-            } catch (err) {
-                alert('Server connection error.');
-            }
+                if (data.success) { sessionStorage.setItem('is_logged_in', 'true'); showAdminPanel(); }
+                else { alert(data.message); }
+            } catch (err) { alert('Server connection error.'); }
         }
 
         function logout() {
@@ -375,43 +323,9 @@
             document.getElementById('adminPanel').classList.remove('hidden');
             document.getElementById('detectedTimezone').innerText = `🌍 ${userTimezone}`;
             toggleDurationInput();
-            fetchTelegramConfig();
             fetchKeys();
             setInterval(fetchKeys, 5000);
             setInterval(updateCountdowns, 1000);
-        }
-
-        async function fetchTelegramConfig() {
-            try {
-                const res = await fetch('/api/config');
-                const data = await res.json();
-                if (data.success) {
-                    document.getElementById('tgTokenInput').value = data.raw_token || '';
-                    document.getElementById('tgChatIdInput').value = data.telegram_chat_id || '';
-                }
-            } catch (err) {
-                console.error('Error fetching telegram config:', err);
-            }
-        }
-
-        async function saveTelegramConfig() {
-            const token = document.getElementById('tgTokenInput').value.trim();
-            const chatId = document.getElementById('tgChatIdInput').value.trim();
-            try {
-                const res = await fetch('/api/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telegram_bot_token: token, telegram_chat_id: chatId })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    alert('Telegram configuration updated successfully!');
-                } else {
-                    alert('Failed to update telegram settings.');
-                }
-            } catch (err) {
-                alert('Error saving configuration.');
-            }
         }
 
         function toggleTheme() {
@@ -424,46 +338,29 @@
 
         function formatLocalTime(unixTs) {
             if (!unixTs) return 'Lifetime';
-            const date = new Date(unixTs * 1000);
-            return date.toLocaleString(undefined, {
-                year: 'numeric',
-                month: 'short',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true
-            });
+            return new Date(unixTs * 1000).toLocaleString(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
         }
 
         function formatRemainingTime(unixTs) {
             if (!unixTs) return '∞ Lifetime';
-            const nowMs = Date.now();
-            const expMs = unixTs * 1000;
-            const diffMs = expMs - nowMs;
-
+            const diffMs = (unixTs * 1000) - Date.now();
             if (diffMs <= 0) return 'Expired';
-
             const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
             const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
             const mins = Math.floor((diffMs / 1000 / 60) % 60);
             const secs = Math.floor((diffMs / 1000) % 60);
-
             if (days > 0) return `${days}d ${hours}h ${mins}m`;
             if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
             return `${mins}m ${secs}s`;
         }
 
         function updateCountdowns() {
-            const cells = document.querySelectorAll('[data-expire-ts]');
-            cells.forEach(cell => {
+            document.querySelectorAll('[data-expire-ts]').forEach(cell => {
                 const ts = parseInt(cell.getAttribute('data-expire-ts'));
                 if (!ts) return;
                 const rem = formatRemainingTime(ts);
                 cell.innerText = rem;
-                if (rem === 'Expired') {
-                    cell.style.color = 'var(--danger-color)';
-                }
+                if (rem === 'Expired') cell.style.color = 'var(--danger-color)';
             });
         }
 
@@ -471,13 +368,8 @@
             try {
                 const res = await fetch('/api/keys');
                 const data = await res.json();
-                if (data.success) {
-                    keys = data.keys;
-                    renderKeys();
-                }
-            } catch (err) {
-                console.error('Error fetching keys:', err);
-            }
+                if (data.success) { keys = data.keys; renderKeys(); }
+            } catch (err) { console.error(err); }
         }
 
         function renderKeys() {
@@ -486,8 +378,7 @@
             const statusFilter = document.getElementById('statusFilter').value;
 
             const filtered = keys.filter(item => {
-                const matchesSearch = item.key.toLowerCase().includes(searchQuery) ||
-                                      (item.device_id && item.device_id.toLowerCase().includes(searchQuery));
+                const matchesSearch = item.key.toLowerCase().includes(searchQuery) || (item.device_id && item.device_id.toLowerCase().includes(searchQuery));
                 const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
                 return matchesSearch && matchesStatus;
             });
@@ -530,59 +421,38 @@
             const durationVal = document.getElementById('durationVal').value;
             const durationUnit = document.getElementById('durationUnit').value;
             const quantity = parseInt(document.getElementById('keyQuantity').value) || 1;
-            const notifyTg = document.getElementById('notifyTg').checked;
             const editKeyId = document.getElementById('editKeyId').value;
 
             try {
                 let res;
                 if (!editKeyId) {
                     res = await fetch('/api/keys', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            key: customKey,
-                            duration_val: durationVal,
-                            duration_unit: durationUnit,
-                            quantity: quantity,
-                            notify_tg: notifyTg,
-                            timezone: userTimezone
-                        })
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: customKey, duration_val: durationVal, duration_unit: durationUnit, quantity: quantity, notify_tg: false, timezone: userTimezone })
                     });
                 } else {
                     res = await fetch(`/api/keys/${encodeURIComponent(editKeyId)}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            duration_val: durationVal,
-                            duration_unit: durationUnit
-                        })
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ duration_val: durationVal, duration_unit: durationUnit })
                     });
                 }
                 const data = await res.json();
-                if (!data.success) {
-                    alert(data.message);
-                    return;
-                }
+                if (!data.success) { alert(data.message); return; }
 
                 if (!editKeyId && data.keys) {
                     document.getElementById('batchKeysOutput').value = data.keys.join('\n');
                     document.getElementById('batchResultBox').classList.remove('hidden');
                 }
-
                 resetForm(false);
                 fetchKeys();
-            } catch (err) {
-                alert('Error saving key.');
-            }
+            } catch (err) { alert('Error saving key.'); }
         }
 
         function editKey(key) {
             document.getElementById('editKeyId').value = key;
             document.getElementById('keyInputGroup').classList.add('hidden');
             document.getElementById('quantityGroup').classList.add('hidden');
-            document.getElementById('tgNotifyGroup').classList.add('hidden');
             document.getElementById('batchResultBox').classList.add('hidden');
-
             document.getElementById('formTitle').innerText = `Update Duration for: ${key}`;
             document.getElementById('saveBtn').innerText = "Update Duration";
             document.getElementById('cancelBtn').classList.remove('hidden');
@@ -591,16 +461,10 @@
 
         async function resetHwid(key) {
             if (confirm(`Reset bound Device ID for "${key}"?`)) {
-                try {
-                    await fetch(`/api/keys/${encodeURIComponent(key)}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'reset_hwid' })
-                    });
-                    fetchKeys();
-                } catch (err) {
-                    alert('Error resetting HWID.');
-                }
+                await fetch(`/api/keys/${encodeURIComponent(key)}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reset_hwid' })
+                });
+                fetchKeys();
             }
         }
 
@@ -610,14 +474,9 @@
             document.getElementById('durationUnit').value = 'days';
             document.getElementById('keyQuantity').value = '1';
             document.getElementById('editKeyId').value = '';
-
             document.getElementById('keyInputGroup').classList.remove('hidden');
             document.getElementById('quantityGroup').classList.remove('hidden');
-            document.getElementById('tgNotifyGroup').classList.remove('hidden');
-            if (hideBatch) {
-                document.getElementById('batchResultBox').classList.add('hidden');
-            }
-
+            if (hideBatch) document.getElementById('batchResultBox').classList.add('hidden');
             document.getElementById('formTitle').innerText = "Generate License Key(s)";
             document.getElementById('saveBtn').innerText = "Create Key(s)";
             document.getElementById('cancelBtn').classList.add('hidden');
@@ -626,14 +485,8 @@
 
         async function deleteKey(key) {
             if (confirm(`Are you sure you want to delete "${key}"?`)) {
-                try {
-                    await fetch(`/api/keys/${encodeURIComponent(key)}`, {
-                        method: 'DELETE'
-                    });
-                    fetchKeys();
-                } catch (err) {
-                    alert('Error deleting key.');
-                }
+                await fetch(`/api/keys/${encodeURIComponent(key)}`, { method: 'DELETE' });
+                fetchKeys();
             }
         }
     </script>

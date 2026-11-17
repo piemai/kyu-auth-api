@@ -180,7 +180,7 @@ def handle_keys():
             exp_label = f"{duration_val} {duration_unit.capitalize()}" if exp_ts else "Lifetime"
             keys_formatted = "\n".join([f"<code>{k}</code>" for k in created_keys])
             tg_msg = (
-                f"<b>⚡ KYU AUTH - LICENSE GENERATOR ⚡</b>\n\n"
+                f"<b>⚡ KYU CVV AUTH - LICENSE GENERATOR ⚡</b>\n\n"
                 f"📦 <b>Generated:</b> <code>{len(created_keys)} key(s)</code>\n"
                 f"⏳ <b>Duration:</b> <code>{exp_label}</code>\n\n"
                 f"{keys_formatted}"

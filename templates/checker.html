@@ -115,6 +115,15 @@
         .btn-secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border-color); box-shadow: none; }
         .btn-secondary:hover { background-color: var(--code-bg); }
 
+        .filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+        .filter-btn {
+            background: var(--code-bg); color: var(--text-muted); border: 1px solid var(--border-color);
+            padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: none;
+        }
+        .filter-btn.active {
+            background: var(--primary-color); color: white; border-color: var(--primary-color);
+        }
+
         .table-responsive { overflow-x: auto; max-height: 450px; border: 1px solid var(--border-color); border-radius: 10px; }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 13px; }
@@ -153,24 +162,6 @@
             </div>
         </header>
 
-        <!-- Telegram Auto-Sender Config Card -->
-        <div class="card">
-            <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 15px; color: var(--primary-color);">🤖 Telegram Auto-Sender Configuration</h3>
-            <div class="grid-2">
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label for="tgTokenInput">Telegram Bot Token</label>
-                    <input type="text" id="tgTokenInput" placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ">
-                </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label for="tgChatInput">Telegram Chat ID</label>
-                    <input type="text" id="tgChatInput" placeholder="-1001234567890">
-                </div>
-            </div>
-            <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
-                <button onclick="saveTelegramConfig()" style="padding: 8px 16px; font-size: 12px;">💾 Save Telegram Config</button>
-            </div>
-        </div>
-
         <div class="card">
             <div class="grid-2">
                 <div class="form-group">
@@ -208,6 +199,13 @@
                 <div class="stat-box"><span>Error</span><strong class="stat-error" id="statError">0</strong></div>
             </div>
 
+            <div class="filter-bar">
+                <button class="filter-btn active" onclick="setFilter('ALL', this)">All Results</button>
+                <button class="filter-btn" onclick="setFilter('LIVE', this)">🟢 Live Only</button>
+                <button class="filter-btn" onclick="setFilter('DEAD', this)">🔴 Dead Only</button>
+                <button class="filter-btn" onclick="setFilter('ERROR', this)">🟡 Errors Only</button>
+            </div>
+
             <div class="table-responsive">
                 <table>
                     <thead>
@@ -229,6 +227,7 @@
     <script>
         let eventSource = null;
         const binCache = {};
+        let currentFilter = 'ALL';
 
         document.addEventListener("DOMContentLoaded", () => {
             const savedTheme = localStorage.getItem('kyu_theme') || 'light';
@@ -239,7 +238,6 @@
                 document.getElementById('authOverlay').style.display = 'none';
                 startLicenseHeartbeat();
             }
-            loadTelegramConfig();
         });
 
         function startLicenseHeartbeat() {
@@ -262,31 +260,6 @@
                     }
                 } catch (e) {}
             }, 10000);
-        }
-
-        function loadTelegramConfig() {
-            fetch('/api/config').then(res => res.json()).then(data => {
-                if (data.success && data.config) {
-                    document.getElementById('tgTokenInput').value = data.config.tg_token || '';
-                    document.getElementById('tgChatInput').value = data.config.tg_chat || '';
-                }
-            });
-        }
-
-        function saveTelegramConfig() {
-            const tg_token = document.getElementById('tgTokenInput').value.trim();
-            const tg_chat = document.getElementById('tgChatInput').value.trim();
-            fetch('/api/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tg_token, tg_chat })
-            }).then(res => res.json()).then(data => {
-                if (data.success) {
-                    alert('Telegram configuration saved successfully!');
-                } else {
-                    alert('Error saving configuration.');
-                }
-            });
         }
 
         function verifyLicenseKey() {
@@ -319,24 +292,43 @@
             localStorage.setItem('kyu_theme', newTheme);
         }
 
-        async function fetchBinInfo(cardLine) {
+        function setFilter(status, btn) {
+            currentFilter = status;
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const rows = document.querySelectorAll('#resultsTable tr[data-status]');
+            rows.forEach(row => {
+                if (status === 'ALL' || row.getAttribute('data-status') === status) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        // Non-blocking background BIN fetch
+        async function fetchBinInfo(cardLine, cellId) {
             const cc = cardLine.split('|')[0].trim();
             const bin = cc.slice(0, 6);
-            if (binCache[bin]) return binCache[bin];
+            if (binCache[bin]) {
+                document.getElementById(cellId).innerHTML = binCache[bin];
+                return;
+            }
 
             try {
                 const res = await fetch(`https://api.bincheck.io/v1/${bin}`);
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.success) {
-                        const info = {
-                            scheme: (data.scheme || 'unknown').toUpperCase(),
-                            type: (data.type || '').toUpperCase(),
-                            country: data.country ? `${data.country.emoji || ''} ${data.country.name || ''}` : 'Unknown',
-                            bank: data.bank ? data.bank.name : 'Unknown Bank'
-                        };
-                        binCache[bin] = info;
-                        return info;
+                        const scheme = (data.scheme || 'unknown').toUpperCase();
+                        const type = (data.type || '').toUpperCase();
+                        const country = data.country ? `${data.country.emoji || ''} ${data.country.name || ''}` : 'Unknown';
+                        const bank = data.bank ? data.bank.name : 'Unknown Bank';
+                        const html = `<span class="bin-tag">${scheme}</span> <span class="bin-tag">${type}</span><br><small>${bank}, ${country}</small>`;
+                        binCache[bin] = html;
+                        document.getElementById(cellId).innerHTML = html;
+                        return;
                     }
                 }
             } catch (e) {}
@@ -347,18 +339,19 @@
                 });
                 if (res2.ok) {
                     const data2 = await res2.json();
-                    const info2 = {
-                        scheme: (data2.scheme || 'unknown').toUpperCase(),
-                        type: (data2.type || '').toUpperCase(),
-                        country: data2.country ? `${data2.country.emoji || ''} ${data2.country.name || ''}` : 'Unknown',
-                        bank: data2.bank ? data2.bank.name : 'Unknown Bank'
-                    };
-                    binCache[bin] = info2;
-                    return info2;
+                    const scheme = (data2.scheme || 'unknown').toUpperCase();
+                    const type = (data2.type || '').toUpperCase();
+                    const country = data2.country ? `${data2.country.emoji || ''} ${data2.country.name || ''}` : 'Unknown';
+                    const bank = data2.bank ? data2.bank.name : 'Unknown Bank';
+                    const html2 = `<span class="bin-tag">${scheme}</span> <span class="bin-tag">${type}</span><br><small>${bank}, ${country}</small>`;
+                    binCache[bin] = html2;
+                    document.getElementById(cellId).innerHTML = html2;
+                    return;
                 }
             } catch (e) {}
 
-            return { scheme: cc.startsWith('4') ? 'VISA' : 'MC', type: '', country: 'Unknown', bank: 'Unknown Bank' };
+            const fallbackHtml = `<span class="bin-tag">VISA/MC</span><br><small>Unknown Bank, Unknown</small>`;
+            document.getElementById(cellId).innerHTML = fallbackHtml;
         }
 
         function startChecking() {
@@ -390,18 +383,15 @@
                 body: JSON.stringify({ cards, proxies, threads })
             }).then(res => res.json()).then(data => {
                 if (data.success) {
-                    // Safe delay to let backend worker initialize before connecting SSE stream
                     setTimeout(() => {
                         eventSource = new EventSource('/api/checker/stream');
-                        eventSource.onmessage = async function(event) {
+                        eventSource.onmessage = function(event) {
                             const parsedData = JSON.parse(event.data);
                             if (parsedData.finished) { stopChecking(); return; }
-                            await updateResults(parsedData);
+                            updateResults(parsedData);
                         };
-                        eventSource.onerror = function() {
-                            // Handle reconnect or error silently if stream closes
-                        };
-                    }, 500);
+                        eventSource.onerror = function() {};
+                    }, 300);
                 } else {
                     alert('Error starting checker.');
                     stopChecking();
@@ -421,7 +411,7 @@
 
         function exportLiveCards() { window.location.href = '/api/checker/export'; }
 
-        async function updateResults(data) {
+        function updateResults(data) {
             if (data.status_msg) {
                 document.getElementById('proxyStatusBanner').innerText = data.status_msg;
                 return;
@@ -434,17 +424,25 @@
             if (data.code === 0) badgeClass = 'badge-live';
             else if (data.code === 1) badgeClass = 'badge-dead';
 
-            const binData = await fetchBinInfo(data.card);
-            const binHtml = `<span class="bin-tag">${binData.scheme}</span> <span class="bin-tag">${binData.type}</span><br><small>${binData.bank}, ${binData.country}</small>`;
+            const uniqueId = 'bin_' + Math.random().toString(36.substring(2, 9));
 
             const row = document.createElement('tr');
+            row.setAttribute('data-status', data.status);
             row.innerHTML = `
                 <td><code>${data.card}</code></td>
-                <td>${binHtml}</td>
+                <td id="${uniqueId}"><small style="color:var(--text-muted);">Loading BIN...</small></td>
                 <td><span class="${badgeClass}">${data.status}</span></td>
                 <td>${data.detail}</td>
             `;
+
+            if (currentFilter !== 'ALL' && data.status !== currentFilter) {
+                row.style.display = 'none';
+            }
+
             tbody.prepend(row);
+
+            // Fetch BIN info asynchronously in background so it never blocks the checker thread
+            fetchBinInfo(data.card, uniqueId);
 
             document.getElementById('statTotal').innerText = data.total;
             document.getElementById('statChecked').innerText = data.checked;

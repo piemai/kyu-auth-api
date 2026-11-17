@@ -516,23 +516,13 @@ def api_checker_start():
         except: pass
 
     checker_stop_event = threading.Event()
+    data = request.get_json() or {}
     
-    cards = []
-    if 'file' in request.files:
-        file = request.files['file']
-        if file and file.filename != '':
-            content = file.read().decode('utf-8', errors='ignore')
-            cards.extend([line.strip() for line in content.splitlines() if line.strip()])
-
-    text_cards = request.form.get('cards', '')
-    if text_cards:
-        cards.extend([line.strip() for line in text_cards.split('\n') if line.strip()])
-
-    proxies_text = request.form.get('proxies', '')
-    proxies = [p.strip() for p in proxies_text.split('\n') if p.strip()]
-
+    cards = [line.strip() for line in data.get('cards', '').split('\n') if line.strip()]
+    proxies = [p.strip() for p in data.get('proxies', '').split('\n') if p.strip()]
+    
     try:
-        threads_val = int(request.form.get('threads', 15))
+        threads_val = int(data.get('threads', 15))
     except ValueError:
         threads_val = 15
 

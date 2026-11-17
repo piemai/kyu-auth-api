@@ -1,6 +1,6 @@
 flask
 gunicorn
 requests
-python-jose
+cryptography
 curl_cffi
 urllib3

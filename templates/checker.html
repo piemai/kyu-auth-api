@@ -87,7 +87,7 @@
             border-radius: 10px; background-color: var(--code-bg); color: var(--text-color);
             font-family: monospace; font-size: 13px; box-sizing: border-box; transition: border-color 0.2s;
         }
-        textarea { height: 160px; resize: vertical; }
+        textarea { height: 150px; resize: vertical; }
         textarea:focus, input:focus { outline: none; border-color: var(--primary-color); }
 
         .stats-bar { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -125,14 +125,8 @@
         .badge-error { color: var(--warning-color); font-weight: 800; }
         
         .bin-tag {
-            display: inline-block;
-            font-size: 11px;
-            background: var(--table-header);
-            color: var(--primary-color);
-            padding: 2px 6px;
-            border-radius: 4px;
-            margin-right: 4px;
-            font-weight: 600;
+            display: inline-block; font-size: 11px; background: var(--table-header);
+            color: var(--primary-color); padding: 2px 6px; border-radius: 4px; margin-right: 4px; font-weight: 600;
         }
     </style>
 </head>
@@ -159,6 +153,24 @@
             </div>
         </header>
 
+        <!-- Telegram Auto-Sender Config Card -->
+        <div class="card">
+            <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 15px; color: var(--primary-color);">🤖 Telegram Auto-Sender Configuration</h3>
+            <div class="grid-2">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="tgTokenInput">Telegram Bot Token</label>
+                    <input type="text" id="tgTokenInput" placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="tgChatInput">Telegram Chat ID</label>
+                    <input type="text" id="tgChatInput" placeholder="-1001234567890">
+                </div>
+            </div>
+            <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+                <button onclick="saveTelegramConfig()" style="padding: 8px 16px; font-size: 12px;">💾 Save Telegram Config</button>
+            </div>
+        </div>
+
         <div class="card">
             <div class="grid-2">
                 <div class="form-group">
@@ -167,7 +179,7 @@
                 </div>
                 <div class="form-group">
                     <label for="proxiesInput">Proxies (Optional - Leave blank for Proxyless)</label>
-                    <textarea id="proxiesInput" placeholder="ip:port o ip:port:user:pass" style="height: 160px;"></textarea>
+                    <textarea id="proxiesInput" placeholder="ip:port o ip:port:user:pass" style="height: 150px;"></textarea>
                 </div>
             </div>
 
@@ -225,21 +237,66 @@
             const savedKey = sessionStorage.getItem('kyu_verified_key');
             if (savedKey) {
                 document.getElementById('authOverlay').style.display = 'none';
+                startLicenseHeartbeat();
             }
+            loadTelegramConfig();
         });
+
+        // License Heartbeat Check (Every 10 seconds)
+        function startLicenseHeartbeat() {
+            setInterval(async () => {
+                const savedKey = sessionStorage.getItem('kyu_verified_key');
+                if (!savedKey) return;
+
+                const deviceId = navigator.userAgent + navigator.language + screen.width;
+                try {
+                    const res = await fetch('/verify.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: savedKey, device_id: deviceId })
+                    });
+                    const data = await res.json();
+                    if (!data.success) {
+                        alert('Ang iyong license key ay nag-expire na, dinelete, o ni-reset ng admin.');
+                        sessionStorage.removeItem('kyu_verified_key');
+                        window.location.reload();
+                    }
+                } catch (e) {}
+            }, 10000);
+        }
+
+        function loadTelegramConfig() {
+            fetch('/api/config').then(res => res.json()).then(data => {
+                if (data.success && data.config) {
+                    document.getElementById('tgTokenInput').value = data.config.tg_token || '';
+                    document.getElementById('tgChatInput').value = data.config.tg_chat || '';
+                }
+            });
+        }
+
+        function saveTelegramConfig() {
+            const tg_token = document.getElementById('tgTokenInput').value.trim();
+            const tg_chat = document.getElementById('tgChatInput').value.trim();
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tg_token, tg_chat })
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    alert('Telegram configuration saved successfully!');
+                } else {
+                    alert('Error saving configuration.');
+                }
+            });
+        }
 
         function verifyLicenseKey() {
             const key = document.getElementById('licenseKeyInput').value.trim();
             const errDiv = document.getElementById('authError');
             errDiv.innerText = '';
-
-            if (!key) {
-                errDiv.innerText = 'Ilagay ang license key.';
-                return;
-            }
+            if (!key) { errDiv.innerText = 'Ilagay ang license key.'; return; }
 
             const deviceId = navigator.userAgent + navigator.language + screen.width;
-
             fetch('/verify.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -248,12 +305,11 @@
                 if (data.success) {
                     sessionStorage.setItem('kyu_verified_key', key);
                     document.getElementById('authOverlay').style.display = 'none';
+                    startLicenseHeartbeat();
                 } else {
                     errDiv.innerText = data.message || 'Invalid o expired ang key.';
                 }
-            }).catch(() => {
-                errDiv.innerText = 'May error sa server connection.';
-            });
+            }).catch(() => { errDiv.innerText = 'May error sa server connection.'; });
         }
 
         function toggleTheme() {
@@ -278,7 +334,6 @@
                     const info = {
                         scheme: (data.scheme || 'unknown').toUpperCase(),
                         type: (data.type || '').toUpperCase(),
-                        brand: data.brand || '',
                         country: data.country ? `${data.country.emoji || ''} ${data.country.name || ''}` : 'Unknown',
                         bank: data.bank ? data.bank.name : 'Unknown Bank'
                     };
@@ -286,8 +341,7 @@
                     return info;
                 }
             } catch (e) {}
-            
-            return { scheme: cc.startsWith('4') ? 'VISA' : 'MC', type: '', brand: '', country: 'Unknown', bank: 'Unknown Bank' };
+            return { scheme: cc.startsWith('4') ? 'VISA' : 'MC', type: '', country: 'Unknown', bank: 'Unknown Bank' };
         }
 
         function startChecking() {
@@ -295,10 +349,7 @@
             const proxies = document.getElementById('proxiesInput').value.trim();
             const threads = document.getElementById('threadsInput').value.trim();
 
-            if (!cards) {
-                alert('Maglagay muna kahit isang card!');
-                return;
-            }
+            if (!cards) { alert('Maglagay muna kahit isang card!'); return; }
 
             document.getElementById('statTotal').innerText = cards.split('\n').filter(Boolean).length;
             document.getElementById('statChecked').innerText = '0';
@@ -320,10 +371,7 @@
                     eventSource = new EventSource('/api/checker/stream');
                     eventSource.onmessage = async function(event) {
                         const data = JSON.parse(event.data);
-                        if (data.finished) {
-                            stopChecking();
-                            return;
-                        }
+                        if (data.finished) { stopChecking(); return; }
                         await updateResults(data);
                     };
                 } else {
@@ -334,18 +382,13 @@
         }
 
         function stopChecking() {
-            if (eventSource) {
-                eventSource.close();
-                eventSource = null;
-            }
+            if (eventSource) { eventSource.close(); eventSource = null; }
             fetch('/api/checker/stop', { method: 'POST' });
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
         }
 
-        function exportLiveCards() {
-            window.location.href = '/api/checker/export';
-        }
+        function exportLiveCards() { window.location.href = '/api/checker/export'; }
 
         async function updateResults(data) {
             if (data.status_msg) {
@@ -354,15 +397,12 @@
             }
 
             const tbody = document.getElementById('resultsTable');
-            if (tbody.querySelector('td[colspan]')) {
-                tbody.innerHTML = '';
-            }
+            if (tbody.querySelector('td[colspan]')) { tbody.innerHTML = ''; }
 
             let badgeClass = 'badge-error';
             if (data.code === 0) badgeClass = 'badge-live';
             else if (data.code === 1) badgeClass = 'badge-dead';
 
-            // Fetch BIN details asynchronously
             const binData = await fetchBinInfo(data.card);
             const binHtml = `<span class="bin-tag">${binData.scheme}</span> <span class="bin-tag">${binData.type}</span><br><small>${binData.bank}, ${binData.country}</small>`;
 

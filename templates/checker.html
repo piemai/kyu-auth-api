@@ -242,7 +242,6 @@
             loadTelegramConfig();
         });
 
-        // License Heartbeat Check (Every 10 seconds)
         function startLicenseHeartbeat() {
             setInterval(async () => {
                 const savedKey = sessionStorage.getItem('kyu_verified_key');
@@ -320,7 +319,6 @@
             localStorage.setItem('kyu_theme', newTheme);
         }
 
-        // High-accuracy BIN lookup using bincheck.io with binlist fallback
         async function fetchBinInfo(cardLine) {
             const cc = cardLine.split('|')[0].trim();
             const bin = cc.slice(0, 6);
@@ -343,7 +341,6 @@
                 }
             } catch (e) {}
 
-            // Fallback to binlist.net if bincheck.io fails
             try {
                 const res2 = await fetch(`https://lookup.binlist.net/${bin}`, {
                     headers: { 'Accept-Version': '3' }
@@ -365,6 +362,11 @@
         }
 
         function startChecking() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+
             const cards = document.getElementById('cardsInput').value.trim();
             const proxies = document.getElementById('proxiesInput').value.trim();
             const threads = document.getElementById('threadsInput').value.trim();
@@ -386,18 +388,27 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cards, proxies, threads })
-            }).then(res => {
-                if (res.ok) {
-                    eventSource = new EventSource('/api/checker/stream');
-                    eventSource.onmessage = async function(event) {
-                        const data = JSON.parse(event.data);
-                        if (data.finished) { stopChecking(); return; }
-                        await updateResults(data);
-                    };
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    // Safe delay to let backend worker initialize before connecting SSE stream
+                    setTimeout(() => {
+                        eventSource = new EventSource('/api/checker/stream');
+                        eventSource.onmessage = async function(event) {
+                            const parsedData = JSON.parse(event.data);
+                            if (parsedData.finished) { stopChecking(); return; }
+                            await updateResults(parsedData);
+                        };
+                        eventSource.onerror = function() {
+                            // Handle reconnect or error silently if stream closes
+                        };
+                    }, 500);
                 } else {
                     alert('Error starting checker.');
                     stopChecking();
                 }
+            }).catch(() => {
+                alert('Server connection error.');
+                stopChecking();
             });
         }
 

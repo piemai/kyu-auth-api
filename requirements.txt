@@ -2,4 +2,5 @@ flask
 gunicorn
 requests
 python-jose
+curl_cffi
 urllib3

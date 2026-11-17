@@ -3,22 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kyu Auth - Pro License Manager</title>
+    <title>Kyu CVV Auth - Pro License Manager</title>
     <style>
         :root {
-            --bg-color: #f8fafc;
+            --bg-color: #f5f3ff;
             --card-bg: #ffffff;
-            --text-color: #1e293b;
-            --text-muted: #64748b;
-            --primary-color: #4f46e5;
-            --primary-hover: #4338ca;
+            --text-color: #1e1b4b;
+            --text-muted: #6b7280;
+            --primary-color: #7c3aed;
+            --primary-hover: #6d28d9;
+            --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
             --danger-color: #ef4444;
             --danger-hover: #dc2626;
             --warning-color: #f59e0b;
             --warning-hover: #d97706;
-            --border-color: #e2e8f0;
-            --table-header: #f1f5f9;
-            --code-bg: #f1f5f9;
+            --border-color: #ddd6fe;
+            --table-header: #ede9fe;
+            --code-bg: #faf5ff;
             --badge-active-bg: #dcfce7;
             --badge-active-text: #166534;
             --badge-expired-bg: #fee2e2;
@@ -26,19 +27,20 @@
         }
 
         [data-theme="dark"] {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --text-color: #f8fafc;
-            --text-muted: #94a3b8;
-            --primary-color: #6366f1;
-            --primary-hover: #4f46e5;
+            --bg-color: #09090b;
+            --card-bg: #18181b;
+            --text-color: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --primary-color: #8b5cf6;
+            --primary-hover: #7c3aed;
+            --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
             --danger-color: #f87171;
             --danger-hover: #ef4444;
             --warning-color: #fbbf24;
             --warning-hover: #f59e0b;
-            --border-color: #334155;
-            --table-header: #334155;
-            --code-bg: #334155;
+            --border-color: #27272a;
+            --table-header: #27272a;
+            --code-bg: #1f1f23;
             --badge-active-bg: #064e3b;
             --badge-active-text: #6ee7b7;
             --badge-expired-bg: #7f1d1d;
@@ -68,8 +70,8 @@
             margin-bottom: 24px;
             background: var(--card-bg);
             padding: 16px 24px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            border-radius: 14px;
+            box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.05);
             border: 1px solid var(--border-color);
             flex-wrap: wrap;
             gap: 12px;
@@ -78,8 +80,10 @@
         header h1 {
             margin: 0;
             font-size: 20px;
-            color: var(--primary-color);
-            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
         }
 
         .tz-badge {
@@ -89,6 +93,7 @@
             padding: 4px 10px;
             border-radius: 20px;
             font-weight: 500;
+            border: 1px solid var(--border-color);
         }
 
         .header-actions {
@@ -99,8 +104,8 @@
 
         .card {
             background-color: var(--card-bg);
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            border-radius: 14px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
             padding: 24px;
             margin-bottom: 24px;
             border: 1px solid var(--border-color);
@@ -111,6 +116,7 @@
             margin-bottom: 18px;
             font-size: 16px;
             font-weight: 600;
+            color: var(--text-color);
         }
 
         .form-grid {
@@ -132,7 +138,7 @@
         label {
             display: block;
             margin-bottom: 6px;
-            font-weight: 500;
+            font-weight: 600;
             font-size: 13px;
             color: var(--text-muted);
         }
@@ -146,11 +152,12 @@
             width: 100%;
             padding: 10px 12px;
             border: 1px solid var(--border-color);
-            border-radius: 8px;
+            border-radius: 10px;
             box-sizing: border-box;
             font-size: 14px;
-            background-color: var(--card-bg);
+            background-color: var(--code-bg);
             color: var(--text-color);
+            transition: border-color 0.2s;
         }
 
         input:focus, select:focus {
@@ -172,19 +179,21 @@
             width: 16px;
             height: 16px;
             cursor: pointer;
+            accent-color: var(--primary-color);
         }
 
         button {
-            background-color: var(--primary-color);
+            background: var(--accent-gradient);
             color: white;
             border: none;
             padding: 10px 16px;
-            border-radius: 8px;
+            border-radius: 10px;
             cursor: pointer;
             font-weight: 600;
             font-size: 13px;
             white-space: nowrap;
-            transition: background-color 0.2s, transform 0.1s;
+            transition: opacity 0.2s, transform 0.1s;
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
         }
 
         button:active {
@@ -192,7 +201,7 @@
         }
 
         button:hover {
-            background-color: var(--primary-hover);
+            opacity: 0.9;
         }
 
         .btn-sm {
@@ -202,6 +211,7 @@
 
         .btn-danger {
             background-color: var(--danger-color);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
         }
         .btn-danger:hover {
             background-color: var(--danger-hover);
@@ -210,6 +220,7 @@
         .btn-warning {
             background-color: var(--warning-color);
             color: white;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
         }
         .btn-warning:hover {
             background-color: var(--warning-hover);
@@ -219,16 +230,18 @@
             background-color: transparent;
             color: var(--text-color);
             border: 1px solid var(--border-color);
+            box-shadow: none;
         }
         .btn-secondary:hover {
             background-color: var(--code-bg);
+            opacity: 1;
         }
 
         .batch-box {
             margin-top: 16px;
             padding: 14px;
             background-color: var(--code-bg);
-            border-radius: 8px;
+            border-radius: 10px;
             border: 1px dashed var(--primary-color);
         }
         .batch-box textarea {
@@ -259,6 +272,8 @@
 
         .table-responsive {
             overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
         }
 
         table {
@@ -276,7 +291,7 @@
 
         th {
             background-color: var(--table-header);
-            font-weight: 600;
+            font-weight: 700;
             color: var(--text-muted);
             text-transform: uppercase;
             font-size: 11px;
@@ -292,6 +307,7 @@
             font-weight: 600;
             display: inline-block;
             cursor: pointer;
+            border: 1px solid var(--border-color);
         }
 
         .key-text:hover {
@@ -344,7 +360,7 @@
     <!-- LOGIN SCREEN -->
     <div id="loginScreen" class="container" style="max-width: 400px; margin-top: 80px;">
         <div class="card" style="text-align: center;">
-            <h2 style="color: var(--primary-color); margin-bottom: 8px;">Kyu Auth Admin</h2>
+            <h2 style="background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; font-weight: 800;">Kyu CVV Auth Admin</h2>
             <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px;">Enter your admin password to continue.</p>
             <div class="form-group" style="text-align: left;">
                 <label for="loginPassword">Password</label>
@@ -358,11 +374,12 @@
     <div id="adminPanel" class="container hidden">
         <header>
             <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                <h1>⚡ Kyu Auth Pro Dashboard</h1>
+                <h1>⚡ Kyu CVV Auth Dashboard</h1>
                 <span class="tz-badge" id="detectedTimezone">🌍 Detecting location...</span>
             </div>
             <div class="header-actions">
-                <button class="btn-secondary" onclick="toggleTheme()">🌙 / ☀️</button>
+                <a href="/checker" style="color: var(--primary-color); text-decoration: none; font-weight: 600; font-size: 13px; margin-right: 6px;">Open Checker →</a>
+                <button class="btn-secondary" onclick="toggleTheme()" style="padding: 8px 12px;">🌙 / ☀️</button>
                 <button class="btn-danger" onclick="logout()">Logout</button>
             </div>
         </header>
@@ -458,12 +475,16 @@
 
     <script>
         let keys = [];
-        // Automatic detection ng timezone ng device/browser
         const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
 
-        if (sessionStorage.getItem('is_logged_in') === 'true') {
-            showAdminPanel();
-        }
+        document.addEventListener("DOMContentLoaded", () => {
+            const savedTheme = localStorage.getItem('kyu_theme') || 'light';
+            document.body.setAttribute('data-theme', savedTheme);
+
+            if (sessionStorage.getItem('is_logged_in') === 'true') {
+                showAdminPanel();
+            }
+        });
 
         function handleLoginEnter(e) {
             if (e.key === 'Enter') login();
@@ -542,7 +563,10 @@
 
         function toggleTheme() {
             const body = document.body;
-            body.setAttribute('data-theme', body.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+            const currentTheme = body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('kyu_theme', newTheme);
         }
 
         function formatLocalTime(unixTs) {

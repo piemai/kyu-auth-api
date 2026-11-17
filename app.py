@@ -518,14 +518,12 @@ def api_checker_start():
     checker_stop_event = threading.Event()
     
     cards = []
-    # Parse uploaded file if present
     if 'file' in request.files:
         file = request.files['file']
-        if file.filename != '':
+        if file and file.filename != '':
             content = file.read().decode('utf-8', errors='ignore')
             cards.extend([line.strip() for line in content.splitlines() if line.strip()])
 
-    # Parse textarea cards if present
     text_cards = request.form.get('cards', '')
     if text_cards:
         cards.extend([line.strip() for line in text_cards.split('\n') if line.strip()])
@@ -534,9 +532,9 @@ def api_checker_start():
     proxies = [p.strip() for p in proxies_text.split('\n') if p.strip()]
 
     try:
-        threads_val = int(request.form.get('threads', 10))
+        threads_val = int(request.form.get('threads', 15))
     except ValueError:
-        threads_val = 10
+        threads_val = 15
 
     if not cards:
         return jsonify({"success": False, "message": "No cards provided"}), 400

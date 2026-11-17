@@ -94,9 +94,8 @@
             color: var(--text-muted);
         }
 
-        textarea {
+        textarea, input[type="text"] {
             width: 100%;
-            height: 160px;
             padding: 12px;
             border: 1px solid var(--border-color);
             border-radius: 8px;
@@ -105,10 +104,10 @@
             font-family: monospace;
             font-size: 13px;
             box-sizing: border-box;
-            resize: vertical;
         }
 
-        textarea:focus { outline: none; border-color: var(--primary-color); }
+        textarea { height: 160px; resize: vertical; }
+        textarea:focus, input[type="text"]:focus { outline: none; border-color: var(--primary-color); }
 
         .stats-bar {
             display: flex;
@@ -208,8 +207,13 @@
                 </div>
                 <div class="form-group">
                     <label for="proxiesInput">Proxies (Optional - Leave blank for Proxyless)</label>
-                    <textarea id="proxiesInput" placeholder="ip:port o ip:port:user:pass"></textarea>
+                    <textarea id="proxiesInput" placeholder="ip:port or ip:port:user:pass"></textarea>
                 </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 16px;">
+                <label for="cookiesInput">Cloudflare Cookies / cf_clearance (Optional)</label>
+                <input type="text" id="cookiesInput" placeholder="cf_clearance=abc123xyz...; __cf_bm=...">
             </div>
 
             <div style="margin-top: 16px; display: flex; gap: 10px;">
@@ -220,7 +224,6 @@
 
         <div class="card">
             <h3>Live Results</h3>
-            <!-- Proxy Health Status Banner Added Safely -->
             <div id="proxyStatusBanner" style="font-size: 13px; font-weight: 600; color: var(--primary-color); margin-bottom: 12px;"></div>
             
             <div class="stats-bar">
@@ -254,13 +257,13 @@
         function startChecking() {
             const cards = document.getElementById('cardsInput').value.trim();
             const proxies = document.getElementById('proxiesInput').value.trim();
+            const cookies = document.getElementById('cookiesInput').value.trim();
 
             if (!cards) {
                 alert('Maglagay muna kahit isang card!');
                 return;
             }
 
-            // Reset stats & banner
             document.getElementById('statTotal').innerText = cards.split('\n').filter(Boolean).length;
             document.getElementById('statChecked').innerText = '0';
             document.getElementById('statLive').innerText = '0';
@@ -272,11 +275,10 @@
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
 
-            // I-send sa Flask backend gamit ang POST tapos makikinig sa SSE
             fetch('/api/checker/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cards, proxies })
+                body: JSON.stringify({ cards, proxies, cookies })
             }).then(res => {
                 if (res.ok) {
                     eventSource = new EventSource('/api/checker/stream');
@@ -306,7 +308,6 @@
         }
 
         function updateResults(data) {
-            // Handle Proxy Status Messages Safely
             if (data.status_msg) {
                 document.getElementById('proxyStatusBanner').innerText = data.status_msg;
                 return;
@@ -329,7 +330,6 @@
             `;
             tbody.prepend(row);
 
-            // Update stats
             document.getElementById('statChecked').innerText = data.checked;
             document.getElementById('statLive').innerText = data.live;
             document.getElementById('statDead').innerText = data.dead;

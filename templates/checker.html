@@ -6,35 +6,35 @@
     <title>Kyu CVV Auth Checker Web</title>
     <style>
         :root {
-            --bg-color: #f5f3ff;
-            --card-bg: #ffffff;
-            --text-color: #1e1b4b;
-            --text-muted: #6b7280;
-            --primary-color: #7c3aed;
-            --primary-hover: #6d28d9;
-            --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
-            --danger-color: #ef4444;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --border-color: #ddd6fe;
-            --table-header: #ede9fe;
-            --code-bg: #faf5ff;
-        }
-
-        [data-theme="dark"] {
-            --bg-color: #09090b;
-            --card-bg: #18181b;
-            --text-color: #f4f4f5;
-            --text-muted: #a1a1aa;
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
             --primary-color: #8b5cf6;
             --primary-hover: #7c3aed;
             --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
             --danger-color: #f87171;
             --success-color: #34d399;
             --warning-color: #fbbf24;
-            --border-color: #27272a;
-            --table-header: #27272a;
-            --code-bg: #1f1f23;
+            --border-color: #334155;
+            --table-header: #334155;
+            --code-bg: #090d16;
+        }
+
+        [data-theme="light"] {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+            --text-muted: #64748b;
+            --primary-color: #7c3aed;
+            --primary-hover: #6d28d9;
+            --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+            --danger-color: #ef4444;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --border-color: #e2e8f0;
+            --table-header: #f1f5f9;
+            --code-bg: #f8fafc;
         }
 
         body {
@@ -50,24 +50,24 @@
 
         .container { width: 100%; max-width: 1100px; }
 
-        /* Key Gate Modal Overlay */
+        /* Auth Gate Modal Overlay */
         #authOverlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px);
+            background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px);
             display: flex; justify-content: center; align-items: center; z-index: 9999;
         }
         .auth-card {
-            background: var(--card-bg); padding: 32px; border-radius: 16px;
-            border: 1px solid var(--border-color); width: 100%; max-width: 400px;
-            text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);
+            background: var(--card-bg); padding: 36px; border-radius: 16px;
+            border: 1px solid var(--border-color); width: 100%; max-width: 420px;
+            text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
         }
-        .auth-card h2 { margin-top: 0; color: var(--primary-color); font-size: 22px; }
+        .auth-card h2 { margin-top: 0; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 24px; font-weight: 800; }
 
         header {
             display: flex; justify-content: space-between; align-items: center;
             margin-bottom: 24px; background: var(--card-bg); padding: 18px 24px;
             border-radius: 14px; border: 1px solid var(--border-color); flex-wrap: wrap; gap: 12px;
-            box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.05);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
         }
 
         header h1 { margin: 0; font-size: 20px; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
@@ -75,7 +75,7 @@
 
         .card {
             background-color: var(--card-bg); border-radius: 14px; padding: 24px;
-            margin-bottom: 24px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+            margin-bottom: 24px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
         }
 
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -105,14 +105,14 @@
         button {
             background: var(--accent-gradient); color: white; border: none;
             padding: 12px 20px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px;
-            transition: opacity 0.2s, transform 0.1s; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
+            transition: opacity 0.2s, transform 0.1s; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
         }
         button:hover { opacity: 0.9; transform: translateY(-1px); }
         button:active { transform: translateY(0); }
         button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
-        .btn-danger { background: var(--danger-color); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
-        .btn-success { background: var(--success-color); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+        .btn-danger { background: var(--danger-color); box-shadow: 0 4px 12px rgba(248, 113, 113, 0.3); }
+        .btn-success { background: var(--success-color); box-shadow: 0 4px 12px rgba(52, 211, 153, 0.3); color: #0f172a; font-weight: 700; }
         .btn-secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border-color); box-shadow: none; }
         .btn-secondary:hover { background-color: var(--code-bg); }
 
@@ -126,12 +126,12 @@
         .badge-error { color: var(--warning-color); font-weight: 800; }
     </style>
 </head>
-<body data-theme="light">
+<body data-theme="dark">
     <!-- Key Gate Modal -->
     <div id="authOverlay">
         <div class="auth-card">
             <h2>🔒 Kyu CVV Auth Gate</h2>
-            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Ilagay ang iyong License Key para ma-access ang Checker.</p>
+            <p id="authSubtitle" style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Enter your active license key to access the checker.</p>
             <input type="text" id="licenseKeyInput" placeholder="KYU-XXXXXX-XXXXXX" style="margin-bottom: 14px; text-align: center; text-transform: uppercase;">
             <button onclick="verifyLicenseKey()" style="width: 100%;">Authenticate Key</button>
             <div id="authError" style="color: var(--danger-color); font-size: 12px; margin-top: 10px;"></div>
@@ -142,10 +142,10 @@
         <header>
             <div style="display: flex; align-items: center; gap: 12px;">
                 <h1>⚡ Kyu CVV Auth Checker Web</h1>
-                <a href="/" style="color: var(--primary-color); text-decoration: none; font-weight: 600; font-size: 13px;">← Admin Dashboard</a>
             </div>
             <div class="header-actions">
                 <button class="btn-secondary" onclick="toggleTheme()" style="padding: 10px 14px;">🌙 / ☀️</button>
+                <button class="btn-danger" onclick="logoutSession()" style="padding: 10px 14px;">Logout</button>
             </div>
         </header>
 
@@ -157,7 +157,7 @@
                 </div>
                 <div class="form-group">
                     <label for="proxiesInput">Proxies (Optional - Leave blank for Proxyless)</label>
-                    <textarea id="proxiesInput" placeholder="ip:port o ip:port:user:pass" style="height: 160px;"></textarea>
+                    <textarea id="proxiesInput" placeholder="ip:port or ip:port:user:pass" style="height: 160px;"></textarea>
                 </div>
             </div>
 
@@ -205,17 +205,56 @@
 
     <script>
         let eventSource = null;
+        let expiryInterval = null;
 
         document.addEventListener("DOMContentLoaded", () => {
-            const savedTheme = localStorage.getItem('kyu_theme') || 'light';
+            const savedTheme = localStorage.getItem('kyu_theme') || 'dark';
             document.body.setAttribute('data-theme', savedTheme);
 
-            // Check if already authenticated in session
             const savedKey = sessionStorage.getItem('kyu_verified_key');
+            const expiresTs = sessionStorage.getItem('kyu_expires_ts');
+
             if (savedKey) {
-                document.getElementById('authOverlay').style.display = 'none';
+                // Verify validity immediately
+                verifyActiveSession(savedKey, expiresTs);
             }
         });
+
+        function verifyActiveSession(key, expiresTs) {
+            if (expiresTs && expiresTs !== 'null') {
+                const nowSec = Math.floor(Date.now() / 1000);
+                if (nowSec > parseInt(expiresTs)) {
+                    lockCheckerDueToExpired("Your license key has expired. Please enter a valid active key.");
+                    return;
+                }
+            }
+
+            // Start background ticker to lock immediately when expiration hits
+            if (expiresTs && expiresTs !== 'null') {
+                if (expiryInterval) clearInterval(expiryInterval);
+                expiryInterval = setInterval(() => {
+                    const currentSec = Math.floor(Date.now() / 1000);
+                    if (currentSec > parseInt(expiresTs)) {
+                        lockCheckerDueToExpired("Your license session has expired. Access locked.");
+                    }
+                }, 1000);
+            }
+
+            document.getElementById('authOverlay').style.display = 'none';
+        }
+
+        function lockCheckerDueToExpired(message) {
+            if (expiryInterval) clearInterval(expiryInterval);
+            sessionStorage.removeItem('kyu_verified_key');
+            sessionStorage.removeItem('kyu_expires_ts');
+            
+            const overlay = document.getElementById('authOverlay');
+            document.getElementById('licenseKeyInput').value = '';
+            document.getElementById('authSubtitle').innerText = message;
+            document.getElementById('authError').innerText = "Session terminated.";
+            overlay.style.display = 'flex';
+            if (eventSource) stopChecking();
+        }
 
         function verifyLicenseKey() {
             const key = document.getElementById('licenseKeyInput').value.trim();
@@ -223,11 +262,10 @@
             errDiv.innerText = '';
 
             if (!key) {
-                errDiv.innerText = 'Ilagay ang license key.';
+                errDiv.innerText = 'Please enter your license key.';
                 return;
             }
 
-            // Generate simple browser fingerprint for HWID check
             const deviceId = navigator.userAgent + navigator.language + screen.width;
 
             fetch('/verify.php', {
@@ -237,13 +275,21 @@
             }).then(res => res.json()).then(data => {
                 if (data.success) {
                     sessionStorage.setItem('kyu_verified_key', key);
-                    document.getElementById('authOverlay').style.display = 'none';
+                    sessionStorage.setItem('kyu_expires_ts', data.expires_ts || 'null');
+                    verifyActiveSession(key, data.expires_ts);
                 } else {
-                    errDiv.innerText = data.message || 'Invalid o expired ang key.';
+                    errDiv.innerText = data.message || 'Invalid or expired key.';
                 }
             }).catch(() => {
-                errDiv.innerText = 'May error sa server connection.';
+                errDiv.innerText = 'Server connection error.';
             });
+        }
+
+        function logoutSession() {
+            sessionStorage.removeItem('kyu_verified_key');
+            sessionStorage.removeItem('kyu_expires_ts');
+            if (expiryInterval) clearInterval(expiryInterval);
+            window.location.reload();
         }
 
         function toggleTheme() {
@@ -260,7 +306,7 @@
             const threads = document.getElementById('threadsInput').value.trim();
 
             if (!cards) {
-                alert('Maglagay muna kahit isang card!');
+                alert('Please enter at least one card in the textarea!');
                 return;
             }
 

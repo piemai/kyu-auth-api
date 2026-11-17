@@ -94,8 +94,9 @@
             color: var(--text-muted);
         }
 
-        textarea, input[type="text"] {
+        textarea {
             width: 100%;
+            height: 160px;
             padding: 12px;
             border: 1px solid var(--border-color);
             border-radius: 8px;
@@ -104,10 +105,10 @@
             font-family: monospace;
             font-size: 13px;
             box-sizing: border-box;
+            resize: vertical;
         }
 
-        textarea { height: 160px; resize: vertical; }
-        textarea:focus, input[type="text"]:focus { outline: none; border-color: var(--primary-color); }
+        textarea:focus { outline: none; border-color: var(--primary-color); }
 
         .stats-bar {
             display: flex;
@@ -211,11 +212,6 @@
                 </div>
             </div>
 
-            <div class="form-group" style="margin-top: 16px;">
-                <label for="cookiesInput">Cloudflare Cookies / cf_clearance (Optional)</label>
-                <input type="text" id="cookiesInput" placeholder="cf_clearance=abc123xyz...; __cf_bm=...">
-            </div>
-
             <div style="margin-top: 16px; display: flex; gap: 10px;">
                 <button id="startBtn" onclick="startChecking()">Start Checking</button>
                 <button id="stopBtn" class="btn-danger" onclick="stopChecking()" disabled>Stop Checker</button>
@@ -257,7 +253,6 @@
         function startChecking() {
             const cards = document.getElementById('cardsInput').value.trim();
             const proxies = document.getElementById('proxiesInput').value.trim();
-            const cookies = document.getElementById('cookiesInput').value.trim();
 
             if (!cards) {
                 alert('Maglagay muna kahit isang card!');
@@ -278,7 +273,7 @@
             fetch('/api/checker/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cards, proxies, cookies })
+                body: JSON.stringify({ cards, proxies })
             }).then(res => {
                 if (res.ok) {
                     eventSource = new EventSource('/api/checker/stream');

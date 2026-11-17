@@ -19,7 +19,6 @@
             --table-header: #f1f5f9;
             --code-bg: #f1f5f9;
         }
-
         [data-theme="dark"] {
             --bg-color: #0f172a;
             --card-bg: #1e293b;
@@ -34,7 +33,6 @@
             --table-header: #334155;
             --code-bg: #334155;
         }
-
         body {
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
@@ -44,12 +42,7 @@
             display: flex;
             justify-content: center;
         }
-
-        .container {
-            width: 100%;
-            max-width: 1100px;
-        }
-
+        .container { width: 100%; max-width: 1100px; }
         header {
             display: flex;
             justify-content: space-between;
@@ -60,13 +53,7 @@
             border-radius: 12px;
             border: 1px solid var(--border-color);
         }
-
-        header h1 {
-            margin: 0;
-            font-size: 20px;
-            color: var(--primary-color);
-        }
-
+        header h1 { margin: 0; font-size: 20px; color: var(--primary-color); }
         .card {
             background-color: var(--card-bg);
             border-radius: 12px;
@@ -75,119 +62,37 @@
             border: 1px solid var(--border-color);
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
-
-        .grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        @media (max-width: 768px) {
-            .grid-2 { grid-template-columns: 1fr; }
-        }
-
-        label {
-            display: block;
-            margin-bottom: 6px;
-            font-weight: 500;
-            font-size: 13px;
-            color: var(--text-muted);
-        }
-
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+        label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px; color: var(--text-muted); }
         textarea {
-            width: 100%;
-            height: 160px;
-            padding: 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            background-color: var(--code-bg);
-            color: var(--text-color);
-            font-family: monospace;
-            font-size: 13px;
-            box-sizing: border-box;
-            resize: vertical;
+            width: 100%; height: 160px; padding: 12px;
+            border: 1px solid var(--border-color); border-radius: 8px;
+            background-color: var(--code-bg); color: var(--text-color);
+            font-family: monospace; font-size: 13px; box-sizing: border-box; resize: vertical;
         }
-
         textarea:focus { outline: none; border-color: var(--primary-color); }
-
-        .stats-bar {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
+        .stats-bar { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
         .stat-box {
-            flex: 1;
-            min-width: 120px;
-            background: var(--code-bg);
-            padding: 14px;
-            border-radius: 8px;
-            text-align: center;
-            border: 1px solid var(--border-color);
+            flex: 1; min-width: 120px; background: var(--code-bg);
+            padding: 14px; border-radius: 8px; text-align: center; border: 1px solid var(--border-color);
         }
-
-        .stat-box span {
-            display: block;
-            font-size: 12px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-        }
-
-        .stat-box strong {
-            font-size: 20px;
-            font-weight: 700;
-        }
-
+        .stat-box span { display: block; font-size: 12px; color: var(--text-muted); text-transform: uppercase; }
+        .stat-box strong { font-size: 20px; font-weight: 700; }
         .stat-live { color: var(--success-color); }
         .stat-dead { color: var(--danger-color); }
         .stat-error { color: var(--warning-color); }
-
         button {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            transition: background 0.2s;
+            background-color: var(--primary-color); color: white; border: none;
+            padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: background 0.2s;
         }
-
         button:hover { background-color: var(--primary-hover); }
         button:disabled { opacity: 0.6; cursor: not-allowed; }
-
         .btn-danger { background-color: var(--danger-color); }
-
-        .table-responsive {
-            overflow-x: auto;
-            max-height: 400px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th, td {
-            padding: 12px 16px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 13px;
-        }
-
-        th {
-            background-color: var(--table-header);
-            color: var(--text-muted);
-            text-transform: uppercase;
-            font-size: 11px;
-            position: sticky;
-            top: 0;
-        }
-
+        .table-responsive { overflow-x: auto; max-height: 400px; border: 1px solid var(--border-color); border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 13px; }
+        th { background-color: var(--table-header); color: var(--text-muted); text-transform: uppercase; font-size: 11px; position: sticky; top: 0; }
         .badge-live { color: var(--success-color); font-weight: bold; }
         .badge-dead { color: var(--danger-color); font-weight: bold; }
         .badge-error { color: var(--warning-color); font-weight: bold; }
@@ -208,7 +113,7 @@
                 </div>
                 <div class="form-group">
                     <label for="proxiesInput">Proxies (Optional - Leave blank for Proxyless)</label>
-                    <textarea id="proxiesInput" placeholder="ip:port o ip:port:user:pass"></textarea>
+                    <textarea id="proxiesInput" placeholder="ip:port or ip:port:user:pass"></textarea>
                 </div>
             </div>
 
@@ -220,6 +125,7 @@
 
         <div class="card">
             <h3>Live Results</h3>
+            <div id="proxyStatusBanner" style="font-size: 13px; font-weight: 600; color: var(--primary-color); margin-bottom: 12px;"></div>
             <div class="stats-bar">
                 <div class="stat-box"><span>Total</span><strong id="statTotal">0</strong></div>
                 <div class="stat-box"><span>Checked</span><strong id="statChecked">0</strong></div>
@@ -257,18 +163,17 @@
                 return;
             }
 
-            // Reset stats
             document.getElementById('statTotal').innerText = cards.split('\n').filter(Boolean).length;
             document.getElementById('statChecked').innerText = '0';
             document.getElementById('statLive').innerText = '0';
             document.getElementById('statDead').innerText = '0';
             document.getElementById('statError').innerText = '0';
+            document.getElementById('proxyStatusBanner').innerText = '';
             document.getElementById('resultsTable').innerHTML = '';
 
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
 
-            // I-send sa Flask backend gamit ang POST tapos makikinig sa SSE
             fetch('/api/checker/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -302,6 +207,11 @@
         }
 
         function updateResults(data) {
+            if (data.status_msg) {
+                document.getElementById('proxyStatusBanner').innerText = data.status_msg;
+                return;
+            }
+
             const tbody = document.getElementById('resultsTable');
             if (tbody.querySelector('td[colspan]')) {
                 tbody.innerHTML = '';
@@ -319,7 +229,6 @@
             `;
             tbody.prepend(row);
 
-            // Update stats
             document.getElementById('statChecked').innerText = data.checked;
             document.getElementById('statLive').innerText = data.live;
             document.getElementById('statDead').innerText = data.dead;

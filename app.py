@@ -19,6 +19,8 @@ except ImportError:
     base64url_encode = None
 
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 DB_FILE = 'keys.json'
@@ -252,11 +254,19 @@ class WebProxyPool:
         if "://" not in p:
             parts = p.split(":")
             if len(parts) == 2:
-                p = f"http://{p}"
+                p = f"http://{parts[0]}:{parts[1]}"
             elif len(parts) == 4:
                 h, po, u, pw = parts
-                p = f"http://{u}:{pw}@{h}:{po}"
+                safe_pw = urllib.parse.quote(pw, safe='')
+                p = f"http://{u}:{safe_pw}@{h}:{po}"
         return {"http": p, "https": p}
+
+def test_proxy(proxy_dict):
+    try:
+        r = requests.get("https://api.ipify.org?format=json", proxies=proxy_dict, timeout=5, verify=False)
+        return r.status_code == 200
+    except Exception:
+        return False
 
 def check_single_card(card_line, proxy_pool):
     parts = card_line.split("|")
@@ -343,12 +353,46 @@ def check_single_card(card_line, proxy_pool):
         return 2, "ERROR", err_msg or "Exception"
 
 def background_worker(cards, proxies_list):
-    proxy_pool = WebProxyPool(proxies_list)
+    raw_pool = WebProxyPool(proxies_list)
+    valid_proxies = []
+    total_proxies = len(raw_pool.proxies)
+
+    if total_proxies > 0:
+        checker_queue.put({"status_msg": f"Testing {total_proxies} proxy/proxies..."})
+        for p_str in raw_pool.proxies:
+            p = p_str
+            if "://" not in p:
+                parts = p.split(":")
+                if len(parts) == 2:
+                    p = f"http://{parts[0]}:{parts[1]}"
+                elif len(parts) == 4:
+                    h, po, u, pw = parts
+                    safe_pw = urllib.parse.quote(pw, safe='')
+                    p = f"http://{u}:{safe_pw}@{h}:{po}"
+            p_dict = {"http": p, "https": p}
+            if test_proxy(p_dict):
+                valid_proxies.append(p_str)
+        
+        proxy_pool = WebProxyPool(valid_proxies) if valid_proxies else None
+        checker_queue.put({"status_msg": f"Proxy check done: {len(valid_proxies)}/{total_proxies} working."})
+    else:
+        proxy_pool = None
+        checker_queue.put({"status_msg": "Running proxyless mode."})
+
     counts = {"checked": 0, "live": 0, "dead": 0, "error": 0, "total": len(cards)}
 
     for card in cards:
         if checker_stop_event.is_set():
             break
+        
+        if total_proxies > 0 and proxy_pool and not proxy_pool.proxies:
+            checker_queue.put({
+                "card": card, "status": "ERROR", "code": 2, "detail": "All proxies failed health check", **counts
+            })
+            counts["checked"] += 1
+            counts["error"] += 1
+            continue
+
         code, status, detail = check_single_card(card, proxy_pool)
         counts["checked"] += 1
         if code == 0: counts["live"] += 1

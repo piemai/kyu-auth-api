@@ -7,15 +7,17 @@ import queue
 import threading
 import time
 import base64
+import struct
+import hashlib
+import hmac
 from flask import Flask, request, jsonify, render_template, Response
 from datetime import datetime, timedelta, timezone
 
-try:
-    from jose import jwe
-    from jose.utils import base64url_encode
-except ImportError:
-    jwe = None
-    base64url_encode = None
+# Cryptography primitives for native RSA-OAEP and AES encryption
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import padding as cbc_padding
 
 from curl_cffi import requests as cffi_requests
 import requests
@@ -294,6 +296,59 @@ def test_proxy(proxy_dict):
     except Exception:
         return False
 
+def create_native_jwe(plaintext: str, key_entry: dict) -> str:
+    mod_hex = key_entry["modulus"].replace(":", "")
+    exp_int = int(key_entry["exponent"])
+    
+    n_bytes = bytes.fromhex(mod_hex)
+    e_bytes = exp_int.to_bytes((exp_int.bit_length() + 7) // 8, byteorder='big')
+    
+    public_numbers = rsa.RSAPublicNumbers(
+        e=int.from_bytes(e_bytes, 'big'),
+        n=int.from_bytes(n_bytes, 'big')
+    )
+    public_key = public_numbers.public_key()
+    
+    cek = os.urandom(32)
+    iv = os.urandom(16)
+    
+    encrypted_key = public_key.encrypt(
+        cek,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA1()),
+            algorithm=hashes.SHA1(),
+            label=None
+        )
+    )
+    
+    header = {"alg": "RSA-OAEP", "enc": "A128CBC-HS256"}
+    protected_json = json.dumps(header, separators=(",", ":"))
+    
+    def b64url(b):
+        return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
+        
+    protected_b64 = b64url(protected_json.encode("utf-8"))
+    
+    mac_key = cek[:16]
+    enc_key = cek[16:]
+    
+    padder = cbc_padding.PKCS7(128).padder()
+    padded_data = padder.update(plaintext.encode("utf-8")) + padder.finalize()
+    
+    cipher = Cipher(algorithms.AES(enc_key), modes.CBC(iv))
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(padded_data) + encryptor.finalize()
+    
+    aad = protected_b64.encode("ascii")
+    al = struct.pack(">Q", len(aad) * 8)
+    
+    hmac_input = aad + iv + ciphertext + al
+    h = hmac.new(mac_key, hmac_input, hashlib.sha256).digest()
+    tag = h[:16]
+    
+    jwe_token = f"{protected_b64}.{b64url(encrypted_key)}.{b64url(iv)}.{b64url(ciphertext)}.{b64url(tag)}"
+    return jwe_token
+
 def check_single_card(card_line, proxy_pool, token_manager):
     parts = card_line.split("|")
     if len(parts) < 3:
@@ -308,7 +363,6 @@ def check_single_card(card_line, proxy_pool, token_manager):
     p_dict = proxy_pool.next() if proxy_pool else None
     proxy_str = p_dict["http"] if p_dict else None
 
-    # Get dynamic token
     current_token = token_manager.get_token()
 
     headers = {
@@ -337,20 +391,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
         payload = {"ch_name": "", "cc_num": cc, "card_type": card_type, "card_date": expiry, "ch_country": "US"}
         if cvv: payload["card_cvv"] = cvv
 
-        if jwe and base64url_encode:
-            mod_hex = key_entry["modulus"].replace(":", "")
-            exp_int = int(key_entry["exponent"])
-            exp_hex = format(exp_int, "x")
-            if len(exp_hex) % 2 != 0: exp_hex = "0" + exp_hex
-
-            jwk = {
-                "kty": "RSA",
-                "n": base64url_encode(bytes.fromhex(mod_hex)).decode("ascii"),
-                "e": base64url_encode(bytes.fromhex(exp_hex)).decode("ascii"),
-            }
-            jwe_token = jwe.encrypt(json.dumps(payload).encode("utf-8"), jwk, encryption="A128CBC-HS256", algorithm="RSA-OAEP").decode("ascii")
-        else:
-            return 2, "ERROR", "Missing python-jose dependency"
+        jwe_token = create_native_jwe(json.dumps(payload, separators=(",", ":")), key_entry)
 
         auth_headers = headers.copy()
         auth_headers["Content-Type"] = "application/json"

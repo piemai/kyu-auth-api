@@ -307,6 +307,7 @@
             });
         }
 
+        // Non-blocking Server-side BIN Proxy lookup
         async function fetchBinInfo(cardLine, cellId) {
             const cc = cardLine.split('|')[0].trim();
             const bin = cc.slice(0, 6);
@@ -316,36 +317,15 @@
             }
 
             try {
-                const res = await fetch(`https://api.bincheck.io/v1/${bin}`);
+                const res = await fetch(`/api/bin/${bin}`);
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.success) {
-                        const scheme = (data.scheme || 'unknown').toUpperCase();
-                        const type = (data.type || '').toUpperCase();
-                        const country = data.country ? `${data.country.emoji || ''} ${data.country.name || ''}` : 'Unknown';
-                        const bank = data.bank ? data.bank.name : 'Unknown Bank';
-                        const html = `<span class="bin-tag">${scheme}</span> <span class="bin-tag">${type}</span><br><small>${bank}, ${country}</small>`;
+                        const html = `<span class="bin-tag">${data.scheme}</span> <span class="bin-tag">${data.type}</span><br><small>${data.bank}, ${data.country}</small>`;
                         binCache[bin] = html;
                         document.getElementById(cellId).innerHTML = html;
                         return;
                     }
-                }
-            } catch (e) {}
-
-            try {
-                const res2 = await fetch(`https://lookup.binlist.net/${bin}`, {
-                    headers: { 'Accept-Version': '3' }
-                });
-                if (res2.ok) {
-                    const data2 = await res2.json();
-                    const scheme = (data2.scheme || 'unknown').toUpperCase();
-                    const type = (data2.type || '').toUpperCase();
-                    const country = data2.country ? `${data2.country.emoji || ''} ${data2.country.name || ''}` : 'Unknown';
-                    const bank = data2.bank ? data2.bank.name : 'Unknown Bank';
-                    const html2 = `<span class="bin-tag">${scheme}</span> <span class="bin-tag">${type}</span><br><small>${bank}, ${country}</small>`;
-                    binCache[bin] = html2;
-                    document.getElementById(cellId).innerHTML = html2;
-                    return;
                 }
             } catch (e) {}
 

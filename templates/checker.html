@@ -162,6 +162,24 @@
             </div>
         </header>
 
+        <!-- Telegram Auto-Sender Config Card for Live Hits -->
+        <div class="card">
+            <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 15px; color: var(--primary-color);">🤖 Live Cards Telegram Auto-Sender</h3>
+            <div class="grid-2">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="tgTokenInput">Telegram Bot Token (Live Hits)</label>
+                    <input type="text" id="tgTokenInput" placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="tgChatInput">Telegram Chat ID (Live Hits)</label>
+                    <input type="text" id="tgChatInput" placeholder="-1001234567890">
+                </div>
+            </div>
+            <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+                <button onclick="saveTelegramConfig()" style="padding: 8px 16px; font-size: 12px;">💾 Save Live Telegram Config</button>
+            </div>
+        </div>
+
         <div class="card">
             <div class="grid-2">
                 <div class="form-group">
@@ -238,6 +256,7 @@
                 document.getElementById('authOverlay').style.display = 'none';
                 startLicenseHeartbeat();
             }
+            loadTelegramConfig();
         });
 
         function startLicenseHeartbeat() {
@@ -260,6 +279,31 @@
                     }
                 } catch (e) {}
             }, 10000);
+        }
+
+        function loadTelegramConfig() {
+            fetch('/api/config').then(res => res.json()).then(data => {
+                if (data.success && data.config) {
+                    document.getElementById('tgTokenInput').value = data.config.live_tg_token || '';
+                    document.getElementById('tgChatInput').value = data.config.live_tg_chat || '';
+                }
+            });
+        }
+
+        function saveTelegramConfig() {
+            const live_tg_token = document.getElementById('tgTokenInput').value.trim();
+            const live_tg_chat = document.getElementById('tgChatInput').value.trim();
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ live_tg_token, live_tg_chat })
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    alert('Live Telegram configuration saved successfully!');
+                } else {
+                    alert('Error saving configuration.');
+                }
+            });
         }
 
         function verifyLicenseKey() {
@@ -307,7 +351,6 @@
             });
         }
 
-        // Non-blocking Server-side BIN Proxy lookup
         async function fetchBinInfo(cardLine, cellId) {
             const cc = cardLine.split('|')[0].trim();
             const bin = cc.slice(0, 6);

@@ -1,6 +1,3 @@
-# app.py — Flask Web Dashboard for Coast RTA Checker
-# @piezxc28 (Kyu)
-
 import os
 import json
 import time
@@ -89,7 +86,7 @@ def admin_add():
 # Background checker thread para sa SSE streaming
 def background_checker_task(card_lines, proxies_raw):
     global checker_active
-    from ownmerch import parse_card_input, TokenManager, run_card, ProxyPool, INLINE_BEARER_TOKEN
+    from ownmerch import parse_card_input, TokenManager, run_card, ProxyPool, INLINE_BEARER_TOKEN, load_proxies_from_file
     
     proxy_list = []
     if proxies_raw:
@@ -210,7 +207,7 @@ def api_checker_stream():
                 if item.get("finished"):
                     break
             except queue.Empty:
-                yield 'data: {"ping": true}\n\n'
+                yield "data: {"ping": true}\n\n"
                 
     return Response(generate(), mimetype="text/event-stream")
 

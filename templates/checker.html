@@ -256,6 +256,7 @@
     <script>
         let pollTimer = null;
         let isPollingInFlight = false;
+        const binCache = {};
         let currentFilter = 'ALL';
         let remainingSeconds = null;
         let isLifetime = false;
@@ -456,17 +457,32 @@
             });
         }
 
-        function formatBinCell(cardLine, binInfo) {
-            if (binInfo && (binInfo.scheme || binInfo.bank || binInfo.country)) {
-                const scheme = binInfo.scheme || 'VISA/MC';
-                const type = binInfo.type || 'CARD';
-                const bank = binInfo.bank || 'Unknown Bank';
-                const country = binInfo.country || '🌐 Unknown';
-                return `<span class="bin-tag">${scheme}</span> <span class="bin-tag">${type}</span><br><small>${bank}, ${country}</small>`;
+        async function fetchBinInfo(cardLine, cellId) {
+            const cc = cardLine.split('|')[0].trim();
+            const bin = cc.slice(0, 6);
+            if (binCache[bin]) {
+                const cell = document.getElementById(cellId);
+                if (cell) cell.innerHTML = binCache[bin];
+                return;
             }
-            const cc = (cardLine || '').split('|')[0].trim();
-            const fallbackScheme = cc.startsWith('4') ? 'VISA' : (cc.startsWith('5') || cc.startsWith('2') ? 'MASTERCARD' : 'VISA/MC');
-            return `<span class="bin-tag">${fallbackScheme}</span><br><small>Unknown Bank, 🌐 Unknown</small>`;
+
+            try {
+                const res = await fetch(`/api/bin/${bin}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.success) {
+                        const html = `<span class="bin-tag">${data.scheme}</span> <span class="bin-tag">${data.type}</span><br><small>${data.bank}, ${data.country}</small>`;
+                        binCache[bin] = html;
+                        const cell = document.getElementById(cellId);
+                        if (cell) cell.innerHTML = html;
+                        return;
+                    }
+                }
+            } catch (e) {}
+
+            const fallbackHtml = `<span class="bin-tag">VISA/MC</span><br><small>Unknown Bank, Unknown</small>`;
+            const cell = document.getElementById(cellId);
+            if (cell) cell.innerHTML = fallbackHtml;
         }
 
         function startChecking() {
@@ -556,13 +572,13 @@
             if (data.code === 0) badgeClass = 'badge-live';
             else if (data.code === 1) badgeClass = 'badge-dead';
 
-            const binHtml = formatBinCell(data.card, data.bin_info);
+            const uniqueId = 'bin_' + Math.random().toString(36).substring(2, 9);
 
             const row = document.createElement('tr');
             row.setAttribute('data-status', data.status);
             row.innerHTML = `
                 <td><code>${data.card}</code></td>
-                <td>${binHtml}</td>
+                <td id="${uniqueId}"><small style="color:var(--text-muted);">Loading BIN...</small></td>
                 <td><span class="${badgeClass}">${data.status}</span></td>
                 <td>${data.detail}</td>
             `;
@@ -572,6 +588,7 @@
             }
 
             tbody.prepend(row);
+            fetchBinInfo(data.card, uniqueId);
 
             document.getElementById('statTotal').innerText = data.total;
             document.getElementById('statChecked').innerText = data.checked;

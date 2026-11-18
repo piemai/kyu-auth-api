@@ -21,6 +21,16 @@
             --code-bg: #1f1f23;
         }
 
+        body[data-theme="light"] {
+            --bg-color: #f5f3ff;
+            --sidebar-bg: #ffffff;
+            --card-bg: #ffffff;
+            --card-border: #ddd6fe;
+            --text-color: #1e1b4b;
+            --text-muted: #6b7280;
+            --code-bg: #faf5ff;
+        }
+
         body {
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             background-color: var(--bg-color);
@@ -29,6 +39,7 @@
             padding: 0;
             display: flex;
             min-height: 100vh;
+            transition: background-color 0.3s, color 0.3s;
         }
 
         /* SIDEBAR */
@@ -40,6 +51,7 @@
             flex-direction: column;
             justify-content: space-between;
             padding: 24px 16px;
+            transition: background-color 0.3s, border-color 0.3s;
         }
         .brand {
             display: flex;
@@ -94,6 +106,10 @@
             padding: 24px 32px;
             max-width: calc(100vw - 260px);
         }
+        @media (max-width: 900px) {
+            aside { display: none; }
+            main { max-width: 100vw; padding: 16px; }
+        }
 
         /* TOP HEADER BAR */
         .top-header {
@@ -105,10 +121,13 @@
             padding: 16px 24px;
             border-radius: 14px;
             border: 1px solid var(--card-border);
+            transition: background-color 0.3s, border-color 0.3s;
+            flex-wrap: wrap;
+            gap: 12px;
         }
         .top-header h2 { margin: 0; font-size: 18px; font-weight: 700; }
         .top-header p { margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted); }
-        .header-controls { display: flex; align-items: center; gap: 14px; }
+        .header-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 
         .sub-timer-badge {
             font-family: monospace; font-size: 12px; font-weight: 700;
@@ -123,6 +142,7 @@
             gap: 16px;
             margin-bottom: 24px;
         }
+        @media (max-width: 768px) { .stats-grid { grid-template-columns: 1fr 1fr; } }
         .stat-card {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -130,6 +150,7 @@
             padding: 20px;
             position: relative;
             overflow: hidden;
+            transition: background-color 0.3s, border-color 0.3s;
         }
         .stat-card span { font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; }
         .stat-card strong { display: block; font-size: 28px; font-weight: 800; margin-top: 8px; }
@@ -138,13 +159,14 @@
         .stat-dead strong { color: var(--danger-color); }
         .stat-error strong { color: var(--warning-color); }
 
-        /* CARDS & PROXIES CONSOLE */
+        /* CONSOLE INPUT PANEL */
         .console-card {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: 14px;
             padding: 24px;
             margin-bottom: 24px;
+            transition: background-color 0.3s, border-color 0.3s;
         }
         .console-header {
             display: flex;
@@ -162,13 +184,14 @@
         }
 
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px; }
-        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .stats-grid { grid-template-columns: 1fr 1fr; } aside { display: none; } main { max-width: 100vw; } }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
 
         label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 12px; color: var(--text-muted); }
         textarea, input[type="text"], input[type="number"] {
             width: 100%; padding: 12px; border: 1px solid var(--card-border);
             border-radius: 10px; background-color: var(--code-bg); color: var(--text-color);
             font-family: monospace; font-size: 13px; box-sizing: border-box; resize: vertical;
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
         }
         textarea { height: 130px; }
         textarea:focus, input:focus { outline: none; border-color: var(--primary-color); }
@@ -224,7 +247,7 @@
         .auth-card h2 { margin-top: 0; color: #c084fc; font-size: 22px; }
     </style>
 </head>
-<body>
+<body data-theme="dark">
     <!-- Key Gate Modal -->
     <div id="authOverlay">
         <div class="auth-card">
@@ -272,7 +295,8 @@
             </div>
             <div class="header-controls">
                 <div class="sub-timer-badge">⏳ Time Left: <span id="userTimeRemaining">--:--:--</span></div>
-                <button class="btn-danger" onclick="logoutKey()" style="padding: 8px 14px; font-size: 12px;">Logout Key</button>
+                <button class="btn-secondary" onclick="toggleTheme()" style="padding: 8px 12px; font-size: 12px;">🌙 / ☀️ Theme</button>
+                <button class="btn-danger" onclick="logoutKey()" style="padding: 8px 12px; font-size: 12px;">Logout Key</button>
             </div>
         </div>
 
@@ -384,6 +408,9 @@
         }
 
         document.addEventListener("DOMContentLoaded", () => {
+            const savedTheme = localStorage.getItem('kyu_theme') || 'dark';
+            document.body.setAttribute('data-theme', savedTheme);
+
             const savedKey = sessionStorage.getItem('kyu_verified_key');
             if (savedKey) {
                 document.getElementById('licenseKeyInput').value = savedKey;
@@ -399,6 +426,14 @@
                 navigator.sendBeacon('/verify.php', new Blob([payload], { type: 'application/json' }));
             }
         });
+
+        function toggleTheme() {
+            const body = document.body;
+            const currentTheme = body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('kyu_theme', newTheme);
+        }
 
         function formatRemainingSeconds(sec) {
             if (isLifetime) return '∞ Lifetime';

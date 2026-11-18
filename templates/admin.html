@@ -299,14 +299,6 @@
         let keys = [];
         const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
 
-        // HISTORY BACK-BUTTON GUARD
-        history.pushState(null, null, window.location.href);
-        window.addEventListener('popstate', function (event) {
-            if (sessionStorage.getItem('is_logged_in') === 'true') {
-                history.pushState(null, null, window.location.href);
-            }
-        });
-
         document.addEventListener("DOMContentLoaded", () => {
             const savedTheme = localStorage.getItem('kyu_theme') || 'light';
             document.body.setAttribute('data-theme', savedTheme);

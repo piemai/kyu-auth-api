@@ -260,45 +260,53 @@ def handle_config():
         save_config(cfg)
         return jsonify({"success": True})
 
-@app.route('/api/bin/<bin_code>')
-def api_bin_lookup(bin_code):
+def fetch_bin_robust(bin_code):
     bin_code = bin_code.strip()[:6]
+    # 1. Subukan muna ang bincheck.io
     try:
-        r = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=5)
+        r = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=4)
         if r.status_code == 200:
             data = r.json()
             if data and data.get("success"):
-                bank_name = data.get("bank", {}).get("name")
-                country_name = data.get('country', {}).get('name')
-                if bank_name and country_name:
-                    return jsonify({
-                        "success": True,
-                        "scheme": (data.get("scheme") or "UNKNOWN").upper(),
-                        "type": (data.get("type") or "").upper(),
-                        "country": f"{data.get('country', {}).get('emoji', '')} {country_name}",
-                        "bank": bank_name
-                    })
+                bank_name = data.get("bank", {}).get("name") or "Unknown Bank"
+                country_name = data.get('country', {}).get('name') or "Unknown"
+                emoji = data.get('country', {}).get('emoji', '🌐')
+                return {
+                    "success": True,
+                    "scheme": (data.get("scheme") or "VISA/MC").upper(),
+                    "type": (data.get("type") or "CREDIT").upper(),
+                    "country": f"{emoji} {country_name}",
+                    "bank": bank_name
+                }
     except Exception:
         pass
 
+    # 2. Fallback sa binlist.net kung mabagal o error ang bincheck.io
     try:
-        r2 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=5)
+        r2 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=4)
         if r2.status_code == 200:
             data2 = r2.json()
             bank_info = data2.get("bank", {})
             country_info = data2.get("country", {})
-            if bank_info.get("name") and country_info.get("name"):
-                return jsonify({
-                    "success": True,
-                    "scheme": (data2.get("scheme") or "UNKNOWN").upper(),
-                    "type": (data2.get("type") or "").upper(),
-                    "country": f"{country_info.get('emoji', '')} {country_info.get('name', 'Unknown')}",
-                    "bank": bank_info.get("name", "Unknown Bank")
-                })
+            bank_name = bank_info.get("name") or "Unknown Bank"
+            country_name = country_info.get("name") or "Unknown"
+            emoji = country_info.get("emoji", "🌐")
+            return {
+                "success": True,
+                "scheme": (data2.get("scheme") or "VISA/MC").upper(),
+                "type": (data2.get("type") or "CREDIT").upper(),
+                "country": f"{emoji} {country_name}",
+                "bank": bank_name
+            }
     except Exception:
         pass
 
-    return jsonify({"success": False, "scheme": "VISA/MC", "type": "CREDIT", "country": "🌐 Unknown Country", "bank": "🏦 Unknown Bank"})
+    return {"success": False, "scheme": "VISA/MC", "type": "CREDIT", "country": "🌐 Unknown Country", "bank": "🏦 Unknown Bank"}
+
+@app.route('/api/bin/<bin_code>')
+def api_bin_lookup(bin_code):
+    res = fetch_bin_robust(bin_code)
+    return jsonify(res)
 
 @app.route('/api/keys', methods=['GET', 'POST'])
 def handle_keys():
@@ -731,18 +739,9 @@ def background_worker(cards, proxies_list, max_threads):
         
         code, status, detail = check_single_card(card, proxy_pool, token_manager)
         bin_code = card.split("|")[0].strip()[:6]
-        bin_meta = {}
-        try:
-            b_res = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=3).json()
-            if b_res and b_res.get("success"):
-                bin_meta = {
-                    "scheme": (b_res.get("scheme") or "VISA/MC").upper(),
-                    "type": (b_res.get("type") or "CREDIT").upper(),
-                    "bank": b_res.get("bank", {}).get("name", "Unknown Bank"),
-                    "country": f"{b_res.get('country', {}).get('emoji', '')} {b_res.get('country', {}).get('name', 'Unknown')}"
-                }
-        except Exception:
-            pass
+        
+        # Ginamit na ang fetch_bin_robust para sigurado na makuha ang Bank at Country
+        bin_meta = fetch_bin_robust(bin_code)
 
         current_proxy_used = proxy_pool.proxies[(proxy_pool.i - 1) % len(proxy_pool.proxies)] if proxy_pool and proxy_pool.proxies else None
 

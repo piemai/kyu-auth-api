@@ -138,23 +138,24 @@
         /* STATS GRID */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
             margin-bottom: 24px;
         }
-        @media (max-width: 768px) { .stats-grid { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
         .stat-card {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: 14px;
-            padding: 20px;
+            padding: 16px;
             position: relative;
             overflow: hidden;
             transition: background-color 0.3s, border-color 0.3s;
         }
         .stat-card span { font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; }
-        .stat-card strong { display: block; font-size: 28px; font-weight: 800; margin-top: 8px; }
+        .stat-card strong { display: block; font-size: 22px; font-weight: 800; margin-top: 6px; }
         .stat-total strong { color: #818cf8; }
+        .stat-checked strong { color: var(--text-color); }
         .stat-live strong { color: var(--success-color); }
         .stat-dead strong { color: var(--danger-color); }
         .stat-error strong { color: var(--warning-color); }
@@ -305,6 +306,10 @@
             <div class="stat-card stat-total">
                 <span>Total Cards</span>
                 <strong id="statTotal">0</strong>
+            </div>
+            <div class="stat-card stat-checked">
+                <span>Checked</span>
+                <strong id="statChecked">0</strong>
             </div>
             <div class="stat-card stat-live">
                 <span>Live Hits</span>
@@ -629,6 +634,8 @@
             }
             navigator.clipboard.writeText(liveCardsList.join('\n')).then(() => {
                 alert(`Copied ${liveCardsList.length} live card(s) to clipboard!`);
+            }).catch(() => {
+                alert('Failed to copy to clipboard.');
             });
         }
 

@@ -28,7 +28,7 @@ app = Flask(__name__)
 DB_FILE = 'keys.json'
 CONFIG_FILE = 'config.json'
 LIVE_FILE = 'live.txt'
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "errol1028")
 
 DEFAULT_TG_TOKEN = "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg"
 DEFAULT_TG_CHAT = "6516330870"

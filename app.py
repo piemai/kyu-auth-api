@@ -186,11 +186,10 @@ def save_live_card(card_line, detail, bin_info=None, proxy_info=None):
             yr = parts[2].strip() if len(parts) > 2 else ""
             date_str = f"{mo}/{yr}"
 
-            b_info = bin_info if isinstance(bin_info, dict) else {}
-            scheme = b_info.get("scheme", "VISA/MC")
-            card_type = b_info.get("type", "CREDIT")
-            bank = b_info.get("bank", "Unknown Bank")
-            country = b_info.get("country", "Unknown")
+            scheme = bin_info.get("scheme", "VISA/MC") if bin_info else "VISA/MC"
+            card_type = bin_info.get("type", "CREDIT") if bin_info else "CREDIT"
+            bank = bin_info.get("bank", "Unknown Bank") if bin_info else "Unknown Bank"
+            country = bin_info.get("country", "Unknown") if bin_info else "Unknown"
             proxy_display = proxy_info if proxy_info else "Proxyless (Direct)"
 
             tg_msg = (
@@ -269,15 +268,14 @@ def api_bin_lookup(bin_code):
         if r.status_code == 200:
             data = r.json()
             if data and data.get("success"):
-                bank_name = data.get("bank", {}).get("name") or "Unknown Bank"
-                country_name = data.get('country', {}).get('name') or "Unknown"
-                emoji = data.get('country', {}).get('emoji', '')
-                if bank_name:
+                bank_name = data.get("bank", {}).get("name")
+                country_name = data.get('country', {}).get('name')
+                if bank_name and country_name:
                     return jsonify({
                         "success": True,
                         "scheme": (data.get("scheme") or "UNKNOWN").upper(),
-                        "type": (data.get("type") or "CREDIT").upper(),
-                        "country": f"{emoji} {country_name}".strip(),
+                        "type": (data.get("type") or "").upper(),
+                        "country": f"{data.get('country', {}).get('emoji', '')} {country_name}",
                         "bank": bank_name
                     })
     except Exception:
@@ -289,16 +287,13 @@ def api_bin_lookup(bin_code):
             data2 = r2.json()
             bank_info = data2.get("bank", {})
             country_info = data2.get("country", {})
-            bank_name = bank_info.get("name") or "Unknown Bank"
-            country_name = country_info.get("name") or "Unknown"
-            emoji = country_info.get("emoji", "")
-            if bank_name:
+            if bank_info.get("name") and country_info.get("name"):
                 return jsonify({
                     "success": True,
                     "scheme": (data2.get("scheme") or "UNKNOWN").upper(),
-                    "type": (data2.get("type") or "CREDIT").upper(),
-                    "country": f"{emoji} {country_name}".strip(),
-                    "bank": bank_name
+                    "type": (data2.get("type") or "").upper(),
+                    "country": f"{country_info.get('emoji', '')} {country_info.get('name', 'Unknown')}",
+                    "bank": bank_info.get("name", "Unknown Bank")
                 })
     except Exception:
         pass
@@ -736,12 +731,16 @@ def background_worker(cards, proxies_list, max_threads):
         
         code, status, detail = check_single_card(card, proxy_pool, token_manager)
         bin_code = card.split("|")[0].strip()[:6]
-        
-        # Gamitin ang eksaktong working logic para makuha ang bin_meta para sa Telegram at web
         bin_meta = {}
         try:
-            bin_res = api_bin_lookup(bin_code)
-            bin_meta = bin_res.get_json() if hasattr(bin_res, 'get_json') else {}
+            b_res = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=3).json()
+            if b_res and b_res.get("success"):
+                bin_meta = {
+                    "scheme": (b_res.get("scheme") or "VISA/MC").upper(),
+                    "type": (b_res.get("type") or "CREDIT").upper(),
+                    "bank": b_res.get("bank", {}).get("name", "Unknown Bank"),
+                    "country": f"{b_res.get('country', {}).get('emoji', '')} {b_res.get('country', {}).get('name', 'Unknown')}"
+                }
         except Exception:
             pass
 

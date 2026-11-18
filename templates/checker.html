@@ -119,7 +119,6 @@
 
         .btn-danger { background: var(--danger-color); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
         .btn-success { background: var(--success-color); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
-        .btn-warning { background: var(--warning-color); color: white; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
         .btn-secondary { background: transparent; color: var(--text-color); border: 1px solid var(--border-color); box-shadow: none; }
         .btn-secondary:hover { background-color: var(--code-bg); }
 
@@ -209,12 +208,10 @@
                     <label for="threadsInput">Threads</label>
                     <input type="number" id="threadsInput" min="1" max="50" value="15">
                 </div>
-                <div style="display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap;">
+                <div style="display: flex; gap: 10px; margin-top: 18px;">
                     <button id="startBtn" onclick="startChecking()">Start Checking</button>
                     <button id="stopBtn" class="btn-danger" onclick="stopChecking()" disabled>Stop Checker</button>
                     <button class="btn-success" onclick="exportLiveCards()">📥 Download live.txt</button>
-                    <button class="btn-warning" onclick="copyAllLiveCards()">📋 Copy Live Cards</button>
-                    <button class="btn-secondary" onclick="clearResults()">🗑️ Clear Results</button>
                 </div>
             </div>
         </div>
@@ -264,15 +261,6 @@
         let isLifetime = false;
         let heartbeatTimer = null;
         let secondTicker = null;
-        let liveCardsList = [];
-
-        // HISTORY BACK-BUTTON GUARD
-        history.pushState(null, null, window.location.href);
-        window.addEventListener('popstate', function (event) {
-            if (sessionStorage.getItem('kyu_verified_key') !== null) {
-                history.pushState(null, null, window.location.href);
-            }
-        });
 
         function getDeviceId() {
             return navigator.userAgent + navigator.language + screen.width;
@@ -481,29 +469,6 @@
             return `<span class="bin-tag">${fallbackScheme}</span><br><small>Unknown Bank, 🌐 Unknown</small>`;
         }
 
-        function copyAllLiveCards() {
-            if (liveCardsList.length === 0) {
-                alert('No live cards to copy yet!');
-                return;
-            }
-            navigator.clipboard.writeText(liveCardsList.join('\n')).then(() => {
-                alert(`Copied ${liveCardsList.length} live card(s) to clipboard!`);
-            }).catch(() => {
-                alert('Failed to copy to clipboard.');
-            });
-        }
-
-        function clearResults() {
-            liveCardsList = [];
-            document.getElementById('statTotal').innerText = '0';
-            document.getElementById('statChecked').innerText = '0';
-            document.getElementById('statLive').innerText = '0';
-            document.getElementById('statDead').innerText = '0';
-            document.getElementById('statError').innerText = '0';
-            document.getElementById('proxyStatusBanner').innerText = '';
-            document.getElementById('resultsTable').innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No cards checked yet.</td></tr>';
-        }
-
         function startChecking() {
             if (pollTimer) {
                 clearInterval(pollTimer);
@@ -517,7 +482,6 @@
 
             if (!cards) { alert('Please enter at least one card!'); return; }
 
-            liveCardsList = [];
             document.getElementById('statTotal').innerText = cards.split('\n').filter(Boolean).length;
             document.getElementById('statChecked').innerText = '0';
             document.getElementById('statLive').innerText = '0';
@@ -589,12 +553,8 @@
             if (tbody.querySelector('td[colspan]')) { tbody.innerHTML = ''; }
 
             let badgeClass = 'badge-error';
-            if (data.code === 0) {
-                badgeClass = 'badge-live';
-                liveCardsList.push(`${data.card} | ${data.detail}`);
-            } else if (data.code === 1) {
-                badgeClass = 'badge-dead';
-            }
+            if (data.code === 0) badgeClass = 'badge-live';
+            else if (data.code === 1) badgeClass = 'badge-dead';
 
             const binHtml = formatBinCell(data.card, data.bin_info);
 

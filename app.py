@@ -757,6 +757,7 @@ def background_worker(cards, proxies_list, max_threads):
                 "status": status,
                 "code": code,
                 "detail": detail,
+                "bin_info": bin_meta,  # <--- IDINAGDAG DITO PARA LUMABAS SA TELEGRAM AT WEB
                 **counts
             })
 

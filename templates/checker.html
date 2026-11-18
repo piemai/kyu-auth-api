@@ -70,7 +70,14 @@
         }
 
         header h1 { margin: 0; font-size: 20px; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
-        .header-actions { display: flex; align-items: center; gap: 10px; }
+        .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+        .sub-timer-badge {
+            font-family: monospace; font-size: 13px; font-weight: 700;
+            background: var(--code-bg); color: var(--primary-color);
+            padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border-color);
+            display: flex; align-items: center; gap: 6px;
+        }
 
         .card {
             background-color: var(--card-bg); border-radius: 14px; padding: 24px;
@@ -153,12 +160,16 @@
 
     <div class="container">
         <header>
-            <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                 <h1>⚡ Kyu CVV Auth Checker Web</h1>
                 <a href="/" style="color: var(--primary-color); text-decoration: none; font-weight: 600; font-size: 13px;">← Admin Dashboard</a>
             </div>
             <div class="header-actions">
+                <div class="sub-timer-badge" title="Auto-pauses when you logout or close the page">
+                    ⏳ Time Left: <span id="userTimeRemaining">--:--:--</span>
+                </div>
                 <button class="btn-secondary" onclick="toggleTheme()" style="padding: 10px 14px;">🌙 / ☀️</button>
+                <button class="btn-danger" onclick="logoutKey()" style="padding: 10px 14px;">Logout Key</button>
             </div>
         </header>
 
@@ -246,6 +257,14 @@
         let eventSource = null;
         const binCache = {};
         let currentFilter = 'ALL';
+        let remainingSeconds = null;
+        let isLifetime = false;
+        let heartbeatTimer = null;
+        let secondTicker = null;
+
+        function getDeviceId() {
+            return navigator.userAgent + navigator.language + screen.width;
+        }
 
         document.addEventListener("DOMContentLoaded", () => {
             const savedTheme = localStorage.getItem('kyu_theme') || 'light';
@@ -253,32 +272,114 @@
 
             const savedKey = sessionStorage.getItem('kyu_verified_key');
             if (savedKey) {
-                document.getElementById('authOverlay').style.display = 'none';
-                startLicenseHeartbeat();
+                document.getElementById('licenseKeyInput').value = savedKey;
+                verifyLicenseKey();
             }
             loadTelegramConfig();
         });
 
+        // Auto-pause agad kapag sinara ang tab o nag-refresh
+        window.addEventListener("beforeunload", () => {
+            const savedKey = sessionStorage.getItem('kyu_verified_key');
+            if (savedKey) {
+                const payload = JSON.stringify({ key: savedKey, device_id: getDeviceId(), action: 'pause' });
+                navigator.sendBeacon('/verify.php', new Blob([payload], { type: 'application/json' }));
+            }
+        });
+
+        function formatRemainingSeconds(sec) {
+            if (isLifetime) return '∞ Lifetime';
+            if (sec === null || sec === undefined) return '--:--:--';
+            if (sec <= 0) return 'Expired';
+            const days = Math.floor(sec / 86400);
+            const hours = Math.floor((sec % 86400) / 3600);
+            const mins = Math.floor((sec % 3600) / 60);
+            const secs = Math.floor(sec % 60);
+            if (days > 0) return `${days}d ${hours}h ${mins}m ${secs}s`;
+            if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+            return `${mins}m ${secs}s`;
+        }
+
+        function updateTimerDisplay() {
+            const el = document.getElementById('userTimeRemaining');
+            el.innerText = formatRemainingSeconds(remainingSeconds);
+            if (!isLifetime && remainingSeconds !== null && remainingSeconds <= 0) {
+                el.style.color = 'var(--danger-color)';
+            } else {
+                el.style.color = 'var(--primary-color)';
+            }
+        }
+
         function startLicenseHeartbeat() {
-            setInterval(async () => {
+            if (heartbeatTimer) clearInterval(heartbeatTimer);
+            if (secondTicker) clearInterval(secondTicker);
+
+            // Second-by-second live countdown sa UI
+            secondTicker = setInterval(() => {
+                if (!isLifetime && remainingSeconds !== null && remainingSeconds > 0) {
+                    remainingSeconds -= 1;
+                    updateTimerDisplay();
+                    if (remainingSeconds <= 0) {
+                        handleExpiredSession('Your license key time has run out!');
+                    }
+                }
+            }, 1000);
+
+            // Server sync & active heartbeat every 5 seconds
+            heartbeatTimer = setInterval(async () => {
                 const savedKey = sessionStorage.getItem('kyu_verified_key');
                 if (!savedKey) return;
 
-                const deviceId = navigator.userAgent + navigator.language + screen.width;
                 try {
                     const res = await fetch('/verify.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key: savedKey, device_id: deviceId })
+                        body: JSON.stringify({ key: savedKey, device_id: getDeviceId(), action: 'ping' })
                     });
                     const data = await res.json();
                     if (!data.success) {
-                        alert('Your license key has expired, been deleted, or been reset by the admin.');
-                        sessionStorage.removeItem('kyu_verified_key');
-                        window.location.reload();
+                        handleExpiredSession(data.message || 'Your license key has expired, been deleted, or been reset by the admin.');
+                    } else {
+                        isLifetime = (data.remaining_seconds === null);
+                        remainingSeconds = data.remaining_seconds;
+                        updateTimerDisplay();
                     }
                 } catch (e) {}
-            }, 10000);
+            }, 5000);
+        }
+
+        function handleExpiredSession(msg) {
+            stopChecking();
+            if (heartbeatTimer) clearInterval(heartbeatTimer);
+            if (secondTicker) clearInterval(secondTicker);
+            alert(msg);
+            sessionStorage.removeItem('kyu_verified_key');
+            document.getElementById('authOverlay').style.display = 'flex';
+        }
+
+        async function logoutKey() {
+            stopChecking();
+            const savedKey = sessionStorage.getItem('kyu_verified_key');
+            if (heartbeatTimer) clearInterval(heartbeatTimer);
+            if (secondTicker) clearInterval(secondTicker);
+
+            if (savedKey) {
+                try {
+                    await fetch('/verify.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: savedKey, device_id: getDeviceId(), action: 'pause' })
+                    });
+                } catch (e) {}
+            }
+
+            sessionStorage.removeItem('kyu_verified_key');
+            remainingSeconds = null;
+            isLifetime = false;
+            document.getElementById('userTimeRemaining').innerText = '--:--:--';
+            document.getElementById('licenseKeyInput').value = '';
+            document.getElementById('authError').innerText = '';
+            document.getElementById('authOverlay').style.display = 'flex';
         }
 
         function loadTelegramConfig() {
@@ -312,18 +413,22 @@
             errDiv.innerText = '';
             if (!key) { errDiv.innerText = 'Please enter a license key.'; return; }
 
-            const deviceId = navigator.userAgent + navigator.language + screen.width;
             fetch('/verify.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: key, device_id: deviceId })
+                body: JSON.stringify({ key: key, device_id: getDeviceId(), action: 'ping' })
             }).then(res => res.json()).then(data => {
                 if (data.success) {
                     sessionStorage.setItem('kyu_verified_key', key);
+                    isLifetime = (data.remaining_seconds === null);
+                    remainingSeconds = data.remaining_seconds;
+                    updateTimerDisplay();
                     document.getElementById('authOverlay').style.display = 'none';
                     startLicenseHeartbeat();
                 } else {
+                    sessionStorage.removeItem('kyu_verified_key');
                     errDiv.innerText = data.message || 'Invalid or expired key.';
+                    document.getElementById('authOverlay').style.display = 'flex';
                 }
             }).catch(() => { errDiv.innerText = 'Server connection error.'; });
         }

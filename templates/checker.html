@@ -254,7 +254,8 @@
     </div>
 
     <script>
-        let eventSource = null;
+        let pollTimer = null;
+        let isPollingInFlight = false;
         const binCache = {};
         let currentFilter = 'ALL';
         let remainingSeconds = null;
@@ -460,7 +461,8 @@
             const cc = cardLine.split('|')[0].trim();
             const bin = cc.slice(0, 6);
             if (binCache[bin]) {
-                document.getElementById(cellId).innerHTML = binCache[bin];
+                const cell = document.getElementById(cellId);
+                if (cell) cell.innerHTML = binCache[bin];
                 return;
             }
 
@@ -471,21 +473,24 @@
                     if (data && data.success) {
                         const html = `<span class="bin-tag">${data.scheme}</span> <span class="bin-tag">${data.type}</span><br><small>${data.bank}, ${data.country}</small>`;
                         binCache[bin] = html;
-                        document.getElementById(cellId).innerHTML = html;
+                        const cell = document.getElementById(cellId);
+                        if (cell) cell.innerHTML = html;
                         return;
                     }
                 }
             } catch (e) {}
 
             const fallbackHtml = `<span class="bin-tag">VISA/MC</span><br><small>Unknown Bank, Unknown</small>`;
-            document.getElementById(cellId).innerHTML = fallbackHtml;
+            const cell = document.getElementById(cellId);
+            if (cell) cell.innerHTML = fallbackHtml;
         }
 
         function startChecking() {
-            if (eventSource) {
-                eventSource.close();
-                eventSource = null;
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
             }
+            isPollingInFlight = false;
 
             const cards = document.getElementById('cardsInput').value.trim();
             const proxies = document.getElementById('proxiesInput').value.trim();
@@ -510,15 +515,27 @@
                 body: JSON.stringify({ cards, proxies, threads })
             }).then(res => res.json()).then(data => {
                 if (data.success) {
-                    setTimeout(() => {
-                        eventSource = new EventSource('/api/checker/stream');
-                        eventSource.onmessage = function(event) {
-                            const parsedData = JSON.parse(event.data);
-                            if (parsedData.finished) { stopChecking(); return; }
-                            updateResults(parsedData);
-                        };
-                        eventSource.onerror = function() {};
-                    }, 300);
+                    pollTimer = setInterval(async () => {
+                        if (isPollingInFlight) return;
+                        isPollingInFlight = true;
+                        try {
+                            const r = await fetch('/api/checker/poll');
+                            const pData = await r.json();
+                            if (pData.success && Array.isArray(pData.items)) {
+                                for (const item of pData.items) {
+                                    if (item.finished) {
+                                        stopChecking();
+                                        isPollingInFlight = false;
+                                        return;
+                                    }
+                                    updateResults(item);
+                                }
+                            }
+                        } catch (e) {
+                        } finally {
+                            isPollingInFlight = false;
+                        }
+                    }, 500);
                 } else {
                     alert('Error starting checker.');
                     stopChecking();
@@ -530,8 +547,12 @@
         }
 
         function stopChecking() {
-            if (eventSource) { eventSource.close(); eventSource = null; }
-            fetch('/api/checker/stop', { method: 'POST' });
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
+            isPollingInFlight = false;
+            fetch('/api/checker/stop', { method: 'POST' }).catch(() => {});
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
         }

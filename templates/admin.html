@@ -212,10 +212,18 @@
             <input type="hidden" id="editKeyId" value="">
             
             <div class="form-grid">
+                <div class="form-group">
+                    <label for="keyType">Key Type</label>
+                    <select id="keyType" onchange="updateKeyPrefix()">
+                        <option value="KYU">COAST RTA (KYU-)</option>
+                        <option value="SACRT">SACRT (SACRT-)</option>
+                    </select>
+                </div>
+
                 <div class="form-group" id="keyInputGroup">
                     <label for="customKey">Custom Key or Prefix (Optional)</label>
                     <div class="input-group">
-                        <input type="text" id="customKey" placeholder="e.g., KYU-VIP">
+                        <input type="text" id="customKey" placeholder="e.g., KYU-VIP or SACRT-VIP">
                         <button type="button" class="btn-secondary" onclick="fillRandomKey()">🎲 Random</button>
                     </div>
                 </div>
@@ -344,14 +352,23 @@
         }
 
         function fillRandomKey() {
+            const type = document.getElementById('keyType').value;
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             let part1 = '', part2 = '';
             for (let i = 0; i < 6; i++) {
                 part1 += chars.charAt(Math.floor(Math.random() * chars.length));
                 part2 += chars.charAt(Math.floor(Math.random() * chars.length));
             }
-            document.getElementById('customKey').value = `KYU-${part1}-${part2}`;
+            document.getElementById('customKey').value = `${type}-${part1}-${part2}`;
             document.getElementById('keyQuantity').value = 1;
+        }
+
+        function updateKeyPrefix() {
+            const current = document.getElementById('customKey').value;
+            const type = document.getElementById('keyType').value;
+            if (current && !current.startsWith(type + '-')) {
+                document.getElementById('customKey').value = '';
+            }
         }
 
         function copyToClipboard(text) { navigator.clipboard.writeText(text); alert(`Copied: ${text}`); }

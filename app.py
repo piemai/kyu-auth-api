@@ -36,6 +36,7 @@ IDLE_PAUSE_THRESHOLD = 20
 
 checker_queue = queue.Queue()
 checker_stop_event = threading.Event()
+checker_running = threading.Event()
 db_lock = threading.Lock()
 
 def load_config():
@@ -768,7 +769,8 @@ def background_worker(cards, proxies_list, max_threads):
     total_proxies = len(raw_pool.proxies)
 
     if total_proxies > 0:
-        checker_queue.put({"status_msg": f"Testing {total_proxies} proxy/proxies..."})
+        time.sleep(0.4)
+            checker_queue.put({"status_msg": f"Testing {total_proxies} proxy/proxies..."})
         for p_str in raw_pool.proxies:
             p = p_str
             if "://" not in p:
@@ -784,10 +786,12 @@ def background_worker(cards, proxies_list, max_threads):
                 valid_proxies.append(p_str)
         
         proxy_pool = WebProxyPool(valid_proxies) if valid_proxies else None
-        checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)} active. Starting..."})
+        time.sleep(0.4)
+            checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)} active. Starting..."})
     else:
         proxy_pool = None
-        checker_queue.put({"status_msg": "Running in multi-threaded proxyless mode..."})
+        time.sleep(0.4)
+            checker_queue.put({"status_msg": "Running in multi-threaded proxyless mode..."})
 
     token_manager = DynamicTokenManager(FALLBACK_BEARER_TOKEN, proxy_pool)
     counts = {"checked": 0, "live": 0, "dead": 0, "error": 0, "total": len(cards)}
@@ -814,6 +818,8 @@ def background_worker(cards, proxies_list, max_threads):
             else:
                 counts["error"] += 1
 
+            time.sleep(0.4)
+            time.sleep(0.4)
             checker_queue.put({
                 "card": card,
                 "status": status,
@@ -829,11 +835,15 @@ def background_worker(cards, proxies_list, max_threads):
             if checker_stop_event.is_set():
                 break
 
-    checker_queue.put({"finished": True, **counts})
+    time.sleep(0.4)
+            checker_queue.put({"finished": True, **counts})
 
 @app.route('/api/checker/start', methods=['POST'])
 def api_checker_start():
-    global checker_queue, checker_stop_event
+    global checker_queue, checker_stop_event, checker_running
+    if checker_running.is_set():
+        return jsonify({"success": False, "message": "Checker already running. Wait or stop it first."}), 429
+
     checker_stop_event.set()
     while not checker_queue.empty():
         try:
@@ -842,20 +852,28 @@ def api_checker_start():
             break
 
     checker_stop_event = threading.Event()
+    checker_running.set()
     data = request.get_json() or {}
     
     cards = [line.strip() for line in data.get('cards', '').split('\n') if line.strip()]
     proxies = [p.strip() for p in data.get('proxies', '').split('\n') if p.strip()]
     
     try:
-        threads_val = int(data.get('threads', 5))
+        threads_val = int(data.get('threads', 3))
     except ValueError:
-        threads_val = 5
+        threads_val = 3
 
     if not cards:
+        checker_running.clear()
         return jsonify({"success": False, "message": "No cards provided"}), 400
 
-    threading.Thread(target=background_worker, args=(cards, proxies, threads_val), daemon=True).start()
+    def _run():
+        try:
+            background_worker(cards, proxies, threads_val)
+        finally:
+            checker_running.clear()
+
+    threading.Thread(target=_run, daemon=True).start()
     return jsonify({"success": True})
 
 @app.route('/api/checker/stop', methods=['POST'])

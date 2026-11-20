@@ -769,8 +769,7 @@ def background_worker(cards, proxies_list, max_threads):
     total_proxies = len(raw_pool.proxies)
 
     if total_proxies > 0:
-        time.sleep(0.4)
-            checker_queue.put({"status_msg": f"Testing {total_proxies} proxy/proxies..."})
+        checker_queue.put({"status_msg": f"Testing {total_proxies} proxy/proxies..."})
         for p_str in raw_pool.proxies:
             p = p_str
             if "://" not in p:
@@ -786,12 +785,10 @@ def background_worker(cards, proxies_list, max_threads):
                 valid_proxies.append(p_str)
         
         proxy_pool = WebProxyPool(valid_proxies) if valid_proxies else None
-        time.sleep(0.4)
-            checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)} active. Starting..."})
+        checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)} active. Starting..."})
     else:
         proxy_pool = None
-        time.sleep(0.4)
-            checker_queue.put({"status_msg": "Running in multi-threaded proxyless mode..."})
+        checker_queue.put({"status_msg": "Running in multi-threaded proxyless mode..."})
 
     token_manager = DynamicTokenManager(FALLBACK_BEARER_TOKEN, proxy_pool)
     counts = {"checked": 0, "live": 0, "dead": 0, "error": 0, "total": len(cards)}
@@ -819,7 +816,6 @@ def background_worker(cards, proxies_list, max_threads):
                 counts["error"] += 1
 
             time.sleep(0.4)
-            time.sleep(0.4)
             checker_queue.put({
                 "card": card,
                 "status": status,
@@ -835,8 +831,8 @@ def background_worker(cards, proxies_list, max_threads):
             if checker_stop_event.is_set():
                 break
 
-    time.sleep(0.4)
-            checker_queue.put({"finished": True, **counts})
+    checker_queue.put({"finished": True, **counts})
+
 
 @app.route('/api/checker/start', methods=['POST'])
 def api_checker_start():

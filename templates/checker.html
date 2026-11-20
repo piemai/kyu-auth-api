@@ -2,254 +2,410 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Kyu CVV Auth — COAST RTA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kyu CVV Auth - COAST RTA</title>
     <style>
         :root {
-            --bg: #0b0e14;
-            --panel: #131820;
-            --panel-2: #1a2030;
-            --border: #2a3348;
-            --text: #e8edf5;
-            --muted: #8b97ad;
-            --accent: #6d5efc;
-            --accent-2: #8b7cff;
-            --green: #22c55e;
-            --red: #ef4444;
-            --yellow: #f59e0b;
-            --code: #0f141c;
+            --bg-color: #09090b;
+            --sidebar-bg: #121216;
+            --card-bg: #18181b;
+            --card-border: #27272a;
+            --text-color: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --primary-color: #7c3aed;
+            --primary-hover: #6d28d9;
+            --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --code-bg: #1f1f23;
         }
+
+        body[data-theme="light"] {
+            --bg-color: #f8f7ff;
+            --sidebar-bg: #ffffff;
+            --card-bg: #ffffff;
+            --card-border: #e4e0f5;
+            --text-color: #1e1b4b;
+            --text-muted: #6b7280;
+            --code-bg: #faf5ff;
+        }
+
         * { box-sizing: border-box; }
         body {
-            margin: 0;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--bg);
-            color: var(--text);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
             min-height: 100vh;
-            overflow-x: hidden;
+            transition: background-color 0.25s, color 0.25s;
         }
-        .topbar {
+
+        aside {
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--card-border);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 22px 16px;
+            flex-shrink: 0;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+            font-weight: 800;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 28px;
+            padding-left: 8px;
+        }
+        .nav-section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 700;
+            margin: 16px 0 8px 8px;
+            letter-spacing: 0.5px;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .nav-item:hover, .nav-item.active {
+            background-color: rgba(124, 58, 237, 0.12);
+            color: #c084fc;
+        }
+        .system-status-box {
+            background: var(--code-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 12px;
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 22px 28px;
+            max-width: calc(100vw - 260px);
+        }
+        @media (max-width: 900px) {
+            aside { display: none; }
+            main { max-width: 100vw; padding: 14px; }
+        }
+
+        .top-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 14px 18px;
-            background: var(--panel);
-            border-bottom: 1px solid var(--border);
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .brand {
-            font-weight: 800;
-            font-size: 16px;
-            background: linear-gradient(90deg, #6d5efc, #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .timer {
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            font-size: 13px;
-            background: var(--panel-2);
-            padding: 6px 12px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-        }
-        .wrap {
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 16px;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
-            margin-bottom: 16px;
-        }
-        @media (max-width: 720px) {
-            .stats { grid-template-columns: repeat(2, 1fr); }
-        }
-        .stat {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 14px;
-        }
-        .stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
-        .stat strong { display: block; font-size: 22px; margin-top: 4px; }
-        .panel {
-            background: var(--panel);
-            border: 1px solid var(--border);
+            margin-bottom: 20px;
+            background: var(--card-bg);
+            padding: 16px 20px;
             border-radius: 14px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-        label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
-        textarea, input[type="number"], input[type="text"] {
-            width: 100%;
-            background: var(--code);
-            color: var(--text);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 10px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            font-size: 13px;
-        }
-        textarea { height: 140px; resize: vertical; }
-        .row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+            border: 1px solid var(--card-border);
+            flex-wrap: wrap;
             gap: 12px;
         }
-        @media (max-width: 720px) {
-            .row { grid-template-columns: 1fr; }
+        .top-header h2 { margin: 0; font-size: 18px; font-weight: 700; }
+        .top-header p { margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted); }
+        .header-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+        .sub-timer-badge {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12px;
+            font-weight: 700;
+            background: var(--code-bg);
+            color: #c084fc;
+            padding: 8px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--card-border);
         }
-        .actions {
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 16px;
+        }
+        .stat-card span { font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.4px; }
+        .stat-card strong { display: block; font-size: 22px; font-weight: 800; margin-top: 6px; }
+        .stat-live strong { color: var(--success-color); }
+        .stat-dead strong { color: var(--danger-color); }
+        .stat-error strong { color: var(--warning-color); }
+
+        .console-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .console-header {
             display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 12px;
-            align-items: flex-end;
+            gap: 16px;
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 12px;
+            margin-bottom: 16px;
         }
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            padding: 4px 0;
+            position: relative;
+        }
+        .tab-btn.active { color: #c084fc; }
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -13px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--primary-color);
+        }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 12px; color: var(--text-muted); }
+        textarea, input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 11px;
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            background-color: var(--code-bg);
+            color: var(--text-color);
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 13px;
+            resize: vertical;
+        }
+        textarea { height: 130px; }
+        textarea:focus, input:focus { outline: none; border-color: var(--primary-color); }
+
+        .action-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+
         button {
-            background: var(--accent);
+            background: var(--accent-gradient);
             color: white;
             border: none;
             padding: 10px 16px;
             border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: opacity 0.15s, transform 0.1s;
+        }
+        button:hover { opacity: 0.92; }
+        button:active { transform: scale(0.98); }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .btn-danger { background: var(--danger-color); }
+        .btn-success { background: var(--success-color); }
+        .btn-warning { background: var(--warning-color); color: #18181b; }
+        .btn-secondary { background: var(--code-bg); color: var(--text-color); border: 1px solid var(--card-border); }
+
+        .filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+        .filter-btn {
+            background: var(--code-bg);
+            color: var(--text-muted);
+            border: 1px solid var(--card-border);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            font-size: 13px;
         }
-        button:disabled { opacity: .45; cursor: not-allowed; }
-        .btn-red { background: var(--red); }
-        .btn-green { background: var(--green); }
-        .btn-gray { background: #2a3348; }
-        .filters { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
-        .filters button { background: var(--panel-2); }
-        .filters button.active { background: var(--accent); }
-        .results {
-            max-height: 420px;
-            overflow: auto;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-        }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-        th { background: var(--panel-2); color: var(--muted); font-size: 11px; text-transform: uppercase; position: sticky; top: 0; }
-        .live { color: var(--green); font-weight: 700; }
-        .dead { color: var(--red); font-weight: 700; }
-        .err { color: var(--yellow); font-weight: 700; }
+        .filter-btn.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+        .table-responsive { overflow-x: auto; max-height: 420px; border: 1px solid var(--card-border); border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--card-border); font-size: 13px; }
+        th { background-color: var(--code-bg); color: var(--text-muted); text-transform: uppercase; font-size: 11px; font-weight: 700; position: sticky; top: 0; }
+
+        .badge-live { color: var(--success-color); font-weight: 800; }
+        .badge-dead { color: var(--danger-color); font-weight: 800; }
+        .badge-error { color: var(--warning-color); font-weight: 800; }
+
         .bin-tag {
             display: inline-block;
             font-size: 11px;
-            background: var(--panel-2);
-            color: var(--accent-2);
+            background: var(--code-bg);
+            color: #c084fc;
             padding: 2px 6px;
             border-radius: 4px;
             margin-right: 4px;
+            font-weight: 600;
+            border: 1px solid var(--card-border);
         }
+
         #authOverlay {
             position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,.85);
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(9, 9, 11, 0.88);
+            backdrop-filter: blur(6px);
             display: flex;
-            align-items: center;
             justify-content: center;
-            z-index: 100;
+            align-items: center;
+            z-index: 9999;
         }
-        .auth-box {
-            background: var(--panel);
-            border: 1px solid var(--border);
+        .auth-card {
+            background: var(--card-bg);
+            padding: 32px;
             border-radius: 16px;
-            padding: 28px;
-            width: min(400px, 92vw);
+            border: 1px solid var(--card-border);
+            width: 100%;
+            max-width: 400px;
             text-align: center;
         }
-        .auth-box h2 { margin: 0 0 8px; color: var(--accent-2); }
-        .auth-box p { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
-        .auth-box input { margin-bottom: 12px; text-align: center; text-transform: uppercase; }
-        #authError { color: var(--red); font-size: 12px; min-height: 18px; margin-top: 8px; }
+        .auth-card h2 { margin-top: 0; color: #c084fc; font-size: 22px; }
     </style>
 </head>
-<body>
+<body data-theme="dark">
     <div id="authOverlay">
-        <div class="auth-box">
-            <h2>COAST RTA Gate</h2>
-            <p>Enter your KYU license key to continue.</p>
-            <input type="text" id="licenseKeyInput" placeholder="KYU-XXXXXX-XXXXXX">
-            <button onclick="verifyLicenseKey()" style="width:100%;">Unlock</button>
-            <div id="authError"></div>
+        <div class="auth-card">
+            <h2>🔒 Kyu CVV Auth Gate</h2>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Enter your license key to access the checker.</p>
+            <input type="text" id="licenseKeyInput" placeholder="KYU-XXXXXX-XXXXXX" style="margin-bottom: 14px; text-align: center; text-transform: uppercase;">
+            <button onclick="verifyLicenseKey()" style="width: 100%;">Authenticate Key</button>
+            <div id="authError" style="color: var(--danger-color); font-size: 12px; margin-top: 10px;"></div>
         </div>
     </div>
 
-    <div class="topbar">
-        <div class="brand">⚡ Kyu · COAST RTA</div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <div class="timer">⏳ <span id="userTimeRemaining">--:--:--</span></div>
-            <button class="btn-gray" onclick="logoutKey()" style="padding:6px 12px;font-size:12px;">Logout</button>
-        </div>
-    </div>
+    <aside>
+        <div>
+            <div class="brand">⚡ Kyu CVV Auth</div>
+            <div class="nav-section-title">Navigation</div>
+            <a href="/checker" class="nav-item active">📊 Test Console</a>
+            <a href="/" class="nav-item">🔑 Admin Dashboard</a>
 
-    <div class="wrap">
-        <div class="stats">
-            <div class="stat"><span>Total</span><strong id="statTotal">0</strong></div>
-            <div class="stat"><span>Checked</span><strong id="statChecked">0</strong></div>
-            <div class="stat"><span>Live</span><strong id="statLive" style="color:var(--green)">0</strong></div>
-            <div class="stat"><span>Dead</span><strong id="statDead" style="color:var(--red)">0</strong></div>
-            <div class="stat"><span>Error</span><strong id="statError" style="color:var(--yellow)">0</strong></div>
+            <div class="nav-section-title">Configuration</div>
+            <div style="padding: 0 8px; margin-top: 8px;">
+                <label for="tgTokenInput">Telegram Token</label>
+                <input type="text" id="tgTokenInput" placeholder="Bot Token" style="margin-bottom: 8px; font-size: 11px; padding: 8px;">
+                <label for="tgChatInput">Telegram Chat ID</label>
+                <input type="text" id="tgChatInput" placeholder="Chat ID" style="margin-bottom: 10px; font-size: 11px; padding: 8px;">
+                <button onclick="saveTelegramConfig()" style="width: 100%; font-size: 11px; padding: 8px;">Save Telegram</button>
+            </div>
         </div>
 
-        <div class="panel">
-            <div class="row">
+        <div class="system-status-box">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <span style="width: 8px; height: 8px; background: var(--success-color); border-radius: 50%; display: inline-block;"></span>
+                <strong style="color: var(--text-color);">System Online</strong>
+            </div>
+            <span style="color: var(--text-muted);">Ready for processing</span>
+        </div>
+    </aside>
+
+    <main>
+        <div class="top-header">
+            <div>
+                <h2>CVV Auth Checker</h2>
+                <p>COAST RTA · Web Based · @piezxc28 (Kyu)</p>
+            </div>
+            <div class="header-controls">
+                <div class="sub-timer-badge">⏳ Time Left: <span id="userTimeRemaining">--:--:--</span></div>
+                <button class="btn-secondary" onclick="toggleTheme()" style="padding: 8px 12px; font-size: 12px;">🌙 / ☀️ Theme</button>
+                <button class="btn-danger" onclick="logoutKey()" style="padding: 8px 12px; font-size: 12px;">Logout Key</button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card"><span>Total Cards</span><strong id="statTotal">0</strong></div>
+            <div class="stat-card"><span>Checked</span><strong id="statChecked">0</strong></div>
+            <div class="stat-card stat-live"><span>Live Hits</span><strong id="statLive">0</strong></div>
+            <div class="stat-card stat-dead"><span>Dead Cards</span><strong id="statDead">0</strong></div>
+            <div class="stat-card stat-error"><span>Errors / WAF</span><strong id="statError">0</strong></div>
+        </div>
+
+        <div class="console-card">
+            <div class="console-header">
+                <button class="tab-btn active">💳 Cards & Proxies</button>
+            </div>
+
+            <div class="grid-2">
                 <div>
-                    <label>Cards (cc|mo|yr|cvv)</label>
+                    <label for="cardsInput">Cards (Format: cc|mo|yr|cvv)</label>
                     <textarea id="cardsInput" placeholder="453210...|08|28|123"></textarea>
                 </div>
                 <div>
-                    <label>Proxies (optional)</label>
+                    <label for="proxiesInput">Proxies (Optional - Leave blank for Proxyless)</label>
                     <textarea id="proxiesInput" placeholder="ip:port or ip:port:user:pass"></textarea>
                 </div>
             </div>
-            <div class="actions">
-                <div style="width:90px;">
-                    <label>Threads</label>
+
+            <div class="action-bar">
+                <div style="max-width: 110px;">
+                    <label for="threadsInput">Threads</label>
                     <input type="number" id="threadsInput" min="1" max="20" value="5">
                 </div>
-                <button id="startBtn" onclick="startChecking()">▶ Start</button>
-                <button id="stopBtn" class="btn-red" onclick="stopChecking()" disabled>⏹ Stop</button>
-                <button class="btn-green" onclick="exportLiveCards()">Download live.txt</button>
-                <button class="btn-gray" onclick="copyAllLiveCards()">Copy Live</button>
-                <button class="btn-gray" onclick="clearResults()">Clear</button>
+                <div style="display: flex; gap: 8px; align-items: flex-end; margin-top: 18px; flex-wrap: wrap;">
+                    <button id="startBtn" onclick="startChecking()">▶ Start Checking</button>
+                    <button id="stopBtn" class="btn-danger" onclick="stopChecking()" disabled>⏹ Stop</button>
+                    <button class="btn-success" onclick="exportLiveCards()">📥 Download live.txt</button>
+                    <button class="btn-warning" onclick="copyAllLiveCards()">📋 Copy Live</button>
+                    <button class="btn-secondary" onclick="clearResults()">🗑️ Clear Results</button>
+                </div>
             </div>
-            <div id="proxyStatusBanner" style="margin-top:10px;font-size:12px;color:var(--accent-2);"></div>
         </div>
 
-        <div class="panel">
-            <div class="filters">
-                <button class="active" onclick="setFilter('ALL', this)">All</button>
-                <button onclick="setFilter('LIVE', this)">Live</button>
-                <button onclick="setFilter('DEAD', this)">Dead</button>
-                <button onclick="setFilter('ERROR', this)">Error</button>
+        <div class="console-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                <h3 style="margin: 0; font-size: 15px;">Live Results & BIN Info</h3>
+                <div id="proxyStatusBanner" style="font-size: 12px; font-weight: 600; color: #c084fc;"></div>
             </div>
-            <div class="results">
+
+            <div class="filter-bar">
+                <button class="filter-btn active" onclick="setFilter('ALL', this)">All Results</button>
+                <button class="filter-btn" onclick="setFilter('LIVE', this)">🟢 Live Only</button>
+                <button class="filter-btn" onclick="setFilter('DEAD', this)">🔴 Dead Only</button>
+                <button class="filter-btn" onclick="setFilter('ERROR', this)">🟡 Errors Only</button>
+            </div>
+
+            <div class="table-responsive">
                 <table>
                     <thead>
                         <tr>
-                            <th>Card</th>
-                            <th>BIN</th>
+                            <th>Card Details</th>
+                            <th>BIN Info (Issuer / Country)</th>
                             <th>Status</th>
-                            <th>Message</th>
+                            <th>Response / Gateway Message</th>
                         </tr>
                     </thead>
                     <tbody id="resultsTable">
-                        <tr><td colspan="4" style="text-align:center;color:var(--muted);">No results yet.</td></tr>
+                        <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No cards checked yet.</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
-    </div>
+    </main>
 
     <audio id="liveSound" preload="auto">
         <source src="https://assets.mixkit.co/sfx/preview/mixkit-positive-notification-951.mp3" type="audio/mpeg">
@@ -278,20 +434,32 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            const saved = sessionStorage.getItem('kyu_verified_key');
-            if (saved) {
-                document.getElementById('licenseKeyInput').value = saved;
+            const savedTheme = localStorage.getItem('kyu_theme') || 'dark';
+            document.body.setAttribute('data-theme', savedTheme);
+
+            const savedKey = sessionStorage.getItem('kyu_verified_key');
+            if (savedKey) {
+                document.getElementById('licenseKeyInput').value = savedKey;
                 verifyLicenseKey();
             }
+            loadTelegramConfig();
         });
 
         window.addEventListener('beforeunload', () => {
-            const key = sessionStorage.getItem('kyu_verified_key');
-            if (key) {
-                const payload = JSON.stringify({ key, device_id: getDeviceId(), action: 'pause' });
+            const savedKey = sessionStorage.getItem('kyu_verified_key');
+            if (savedKey) {
+                const payload = JSON.stringify({ key: savedKey, device_id: getDeviceId(), action: 'pause' });
                 navigator.sendBeacon('/verify.php', new Blob([payload], { type: 'application/json' }));
             }
         });
+
+        function toggleTheme() {
+            const body = document.body;
+            const current = body.getAttribute('data-theme');
+            const next = current === 'light' ? 'dark' : 'light';
+            body.setAttribute('data-theme', next);
+            localStorage.setItem('kyu_theme', next);
+        }
 
         function formatRemainingSeconds(sec) {
             if (isLifetime) return '∞ Lifetime';
@@ -309,7 +477,7 @@
         function updateTimerDisplay() {
             const el = document.getElementById('userTimeRemaining');
             el.textContent = formatRemainingSeconds(remainingSeconds);
-            el.style.color = (!isLifetime && remainingSeconds != null && remainingSeconds <= 0) ? 'var(--red)' : 'var(--accent-2)';
+            el.style.color = (!isLifetime && remainingSeconds != null && remainingSeconds <= 0) ? 'var(--danger-color)' : '#c084fc';
         }
 
         function startLicenseHeartbeat() {
@@ -325,17 +493,17 @@
             }, 1000);
 
             heartbeatTimer = setInterval(async () => {
-                const key = sessionStorage.getItem('kyu_verified_key');
-                if (!key) return;
+                const savedKey = sessionStorage.getItem('kyu_verified_key');
+                if (!savedKey) return;
                 try {
                     const res = await fetch('/verify.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key, device_id: getDeviceId(), action: 'ping' })
+                        body: JSON.stringify({ key: savedKey, device_id: getDeviceId(), action: 'ping' })
                     });
                     const data = await res.json();
                     if (!data.success) {
-                        handleExpiredSession(data.message || 'License invalid or expired.');
+                        handleExpiredSession(data.message || 'Your license key has expired or been reset.');
                     } else {
                         isLifetime = data.remaining_seconds === null;
                         remainingSeconds = data.remaining_seconds;
@@ -356,15 +524,15 @@
 
         async function logoutKey() {
             stopChecking();
-            const key = sessionStorage.getItem('kyu_verified_key');
+            const savedKey = sessionStorage.getItem('kyu_verified_key');
             if (heartbeatTimer) clearInterval(heartbeatTimer);
             if (secondTicker) clearInterval(secondTicker);
-            if (key) {
+            if (savedKey) {
                 try {
                     await fetch('/verify.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key, device_id: getDeviceId(), action: 'pause' })
+                        body: JSON.stringify({ key: savedKey, device_id: getDeviceId(), action: 'pause' })
                     });
                 } catch (e) {}
             }
@@ -377,17 +545,38 @@
             document.getElementById('authOverlay').style.display = 'flex';
         }
 
+        function loadTelegramConfig() {
+            fetch('/api/config').then(res => res.json()).then(data => {
+                if (data.success && data.config) {
+                    document.getElementById('tgTokenInput').value = data.config.live_tg_token || '';
+                    document.getElementById('tgChatInput').value = data.config.live_tg_chat || '';
+                }
+            });
+        }
+
+        function saveTelegramConfig() {
+            const live_tg_token = document.getElementById('tgTokenInput').value.trim();
+            const live_tg_chat = document.getElementById('tgChatInput').value.trim();
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ live_tg_token, live_tg_chat })
+            }).then(res => res.json()).then(data => {
+                alert(data.success ? 'Telegram config saved!' : 'Error saving config.');
+            });
+        }
+
         function verifyLicenseKey() {
             const key = document.getElementById('licenseKeyInput').value.trim();
-            const err = document.getElementById('authError');
-            err.textContent = '';
-            if (!key) { err.textContent = 'Enter a key.'; return; }
+            const errDiv = document.getElementById('authError');
+            errDiv.textContent = '';
+            if (!key) { errDiv.textContent = 'Please enter a license key.'; return; }
 
             fetch('/verify.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key, device_id: getDeviceId(), action: 'ping' })
-            }).then(r => r.json()).then(data => {
+                body: JSON.stringify({ key: key, device_id: getDeviceId(), action: 'ping' })
+            }).then(res => res.json()).then(data => {
                 if (data.success) {
                     sessionStorage.setItem('kyu_verified_key', key);
                     isLifetime = data.remaining_seconds === null;
@@ -397,15 +586,15 @@
                     startLicenseHeartbeat();
                 } else {
                     sessionStorage.removeItem('kyu_verified_key');
-                    err.textContent = data.message || 'Invalid or expired key.';
+                    errDiv.textContent = data.message || 'Invalid or expired key.';
                     document.getElementById('authOverlay').style.display = 'flex';
                 }
-            }).catch(() => { err.textContent = 'Server error.'; });
+            }).catch(() => { errDiv.textContent = 'Server connection error.'; });
         }
 
         function setFilter(status, btn) {
             currentFilter = status;
-            document.querySelectorAll('.filters button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             document.querySelectorAll('#resultsTable tr[data-status]').forEach(row => {
                 row.style.display = (status === 'ALL' || row.getAttribute('data-status') === status) ? '' : 'none';
@@ -424,7 +613,7 @@
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.success) {
-                        const html = `<span class="bin-tag">${data.scheme}</span><span class="bin-tag">${data.type}</span><br><small>${data.bank}, ${data.country}</small>`;
+                        const html = `<span class="bin-tag">${data.scheme}</span> <span class="bin-tag">${data.type}</span><br><small>${data.bank}, ${data.country}</small>`;
                         binCache[bin] = html;
                         const cell = document.getElementById(cellId);
                         if (cell) cell.innerHTML = html;
@@ -432,31 +621,28 @@
                     }
                 }
             } catch (e) {}
-            const fallback = `<span class="bin-tag">VISA/MC</span><br><small>Unknown</small>`;
+            const fallback = `<span class="bin-tag">VISA/MC</span><br><small>Unknown Bank, Unknown</small>`;
             const cell = document.getElementById(cellId);
             if (cell) cell.innerHTML = fallback;
         }
 
         function playLiveSound() {
             const a = document.getElementById('liveSound');
-            if (a) {
-                a.currentTime = 0;
-                a.play().catch(() => {});
-            }
+            if (a) { a.currentTime = 0; a.play().catch(() => {}); }
         }
 
         function copyAllLiveCards() {
-            if (!liveCardsList.length) { alert('No live cards yet.'); return; }
+            if (!liveCardsList.length) { alert('No live cards to copy yet!'); return; }
             navigator.clipboard.writeText(liveCardsList.join('\n')).then(() => {
-                alert('Copied ' + liveCardsList.length + ' live card(s).');
-            }).catch(() => alert('Copy failed.'));
+                alert('Copied ' + liveCardsList.length + ' live card(s) to clipboard!');
+            }).catch(() => alert('Failed to copy to clipboard.'));
         }
 
         function clearResults() {
             liveCardsList = [];
             ['statTotal','statChecked','statLive','statDead','statError'].forEach(id => document.getElementById(id).textContent = '0');
             document.getElementById('proxyStatusBanner').textContent = '';
-            document.getElementById('resultsTable').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);">No results yet.</td></tr>';
+            document.getElementById('resultsTable').innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No cards checked yet.</td></tr>';
         }
 
         function startChecking() {
@@ -466,7 +652,7 @@
             const cards = document.getElementById('cardsInput').value.trim();
             const proxies = document.getElementById('proxiesInput').value.trim();
             const threads = document.getElementById('threadsInput').value.trim() || '5';
-            if (!cards) { alert('Enter at least one card.'); return; }
+            if (!cards) { alert('Please enter at least one card!'); return; }
 
             liveCardsList = [];
             document.getElementById('statTotal').textContent = cards.split('\n').filter(Boolean).length;
@@ -484,16 +670,16 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cards, proxies, threads })
-            }).then(r => r.json()).then(data => {
+            }).then(res => res.json()).then(data => {
                 if (data.success) {
                     pollTimer = setInterval(async () => {
                         if (isPollingInFlight) return;
                         isPollingInFlight = true;
                         try {
                             const r = await fetch('/api/checker/poll');
-                            const p = await r.json();
-                            if (p.success && Array.isArray(p.items)) {
-                                for (const item of p.items) {
+                            const pData = await r.json();
+                            if (pData.success && Array.isArray(pData.items)) {
+                                for (const item of pData.items) {
                                     if (item.finished) { stopChecking(); isPollingInFlight = false; return; }
                                     updateResults(item);
                                 }
@@ -502,11 +688,11 @@
                         finally { isPollingInFlight = false; }
                     }, 600);
                 } else {
-                    alert(data.message || 'Could not start checker.');
+                    alert(data.message || 'Error starting checker.');
                     stopChecking();
                 }
             }).catch(() => {
-                alert('Server error.');
+                alert('Server connection error.');
                 stopChecking();
             });
         }
@@ -530,27 +716,27 @@
             const tbody = document.getElementById('resultsTable');
             if (tbody.querySelector('td[colspan]')) tbody.innerHTML = '';
 
-            let cls = 'err';
+            let badgeClass = 'badge-error';
             if (data.code === 0) {
-                cls = 'live';
+                badgeClass = 'badge-live';
                 liveCardsList.push(data.card + ' | ' + data.detail);
                 playLiveSound();
             } else if (data.code === 1) {
-                cls = 'dead';
+                badgeClass = 'badge-dead';
             }
 
-            const uid = 'bin_' + Math.random().toString(36).slice(2, 9);
+            const uniqueId = 'bin_' + Math.random().toString(36).slice(2, 9);
             const row = document.createElement('tr');
             row.setAttribute('data-status', data.status);
             row.innerHTML = `
                 <td><code>${data.card}</code></td>
-                <td id="${uid}"><small style="color:var(--muted);">Loading...</small></td>
-                <td><span class="${cls}">${data.status}</span></td>
+                <td id="${uniqueId}"><small style="color:var(--text-muted);">Loading BIN...</small></td>
+                <td><span class="${badgeClass}">${data.status}</span></td>
                 <td>${data.detail}</td>
             `;
             if (currentFilter !== 'ALL' && data.status !== currentFilter) row.style.display = 'none';
             tbody.prepend(row);
-            fetchBinInfo(data.card, uid);
+            fetchBinInfo(data.card, uniqueId);
 
             document.getElementById('statTotal').textContent = data.total;
             document.getElementById('statChecked').textContent = data.checked;

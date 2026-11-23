@@ -307,13 +307,16 @@
     <script>
         let keys = [];
         const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
+        const AUTH_STORAGE_KEY = 'kyu_admin_auth';
+        const BATCH_STORAGE_KEY = 'kyu_last_generated_keys';
 
         document.addEventListener("DOMContentLoaded", () => {
             const savedTheme = localStorage.getItem('kyu_theme') || 'light';
             document.body.setAttribute('data-theme', savedTheme);
 
-            if (sessionStorage.getItem('is_logged_in') === 'true') {
+            if (localStorage.getItem(AUTH_STORAGE_KEY) === 'true') {
                 showAdminPanel();
+                restoreBatchKeys();
             }
         });
 
@@ -378,6 +381,18 @@
             alert('All generated keys copied to clipboard!');
         }
 
+        function restoreBatchKeys() {
+            try {
+                const raw = localStorage.getItem(BATCH_STORAGE_KEY);
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    document.getElementById('batchKeysOutput').value = parsed.join('\n');
+                    document.getElementById('batchResultBox').classList.remove('hidden');
+                }
+            } catch (err) { console.error(err); }
+        }
+
         async function login() {
             const password = document.getElementById('loginPassword').value;
             try {
@@ -386,13 +401,16 @@
                     body: JSON.stringify({ password })
                 });
                 const data = await res.json();
-                if (data.success) { sessionStorage.setItem('is_logged_in', 'true'); showAdminPanel(); }
-                else { alert(data.message); }
+                if (data.success) {
+                    localStorage.setItem(AUTH_STORAGE_KEY, 'true');
+                    showAdminPanel();
+                    restoreBatchKeys();
+                } else { alert(data.message); }
             } catch (err) { alert('Server connection error.'); }
         }
 
         function logout() {
-            sessionStorage.removeItem('is_logged_in');
+            localStorage.removeItem(AUTH_STORAGE_KEY);
             document.getElementById('adminPanel').classList.add('hidden');
             document.getElementById('loginScreen').classList.remove('hidden');
             document.getElementById('loginPassword').value = '';
@@ -530,6 +548,7 @@
                 if (!data.success) { alert(data.message); return; }
 
                 if (!editKeyId && data.keys) {
+                    localStorage.setItem(BATCH_STORAGE_KEY, JSON.stringify(data.keys));
                     document.getElementById('batchKeysOutput').value = data.keys.join('\n');
                     document.getElementById('batchResultBox').classList.remove('hidden');
                 }
@@ -559,7 +578,7 @@
             }
         }
 
-        function resetForm(hideBatch = true) {
+        function resetForm(hideBatch = false) {
             document.getElementById('customKey').value = '';
             document.getElementById('durationVal').value = '1';
             document.getElementById('durationUnit').value = 'days';

